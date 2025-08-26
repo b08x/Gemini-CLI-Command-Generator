@@ -12,7 +12,7 @@ const TomlViewer: React.FC<TomlViewerProps> = ({ newToml, oldToml }) => {
 
   return (
     <div className="w-full h-full p-4 font-mono text-sm bg-[#212934] border border-[#5c6f7e] rounded-lg overflow-auto">
-      <pre className="whitespace-pre leading-relaxed">
+      <pre className="whitespace-pre-wrap leading-relaxed">
         {changes.map((part, i) => {
           const style = {
             backgroundColor: part.added ? 'rgba(16, 185, 129, 0.2)' : part.removed ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
