@@ -15,6 +15,7 @@ const App: React.FC = () => {
   const [namespace, setNamespace] = useState<string>('');
   const [commandName, setCommandName] = useState<string>('');
   const [argStrategy, setArgStrategy] = useState<ArgStrategy>(ArgStrategy.Injection);
+  const [mcpServers, setMcpServers] = useState<string[]>([]);
   
   // State for generated content and chat
   const [tomlHistory, setTomlHistory] = useState<string[]>([]);
@@ -37,11 +38,11 @@ const App: React.FC = () => {
   const handleGenerate = useCallback(async () => {
     setIsLoading(true);
     setCurrentStep(WizardStep.Refine);
-    const config: CommandConfig = { objective, scope, namespace, commandName, argStrategy };
+    const config: CommandConfig = { objective, scope, namespace, commandName, argStrategy, mcpServers };
     const generatedToml = await generateInitialToml(config);
     setTomlHistory([generatedToml]);
     setIsLoading(false);
-  }, [objective, scope, namespace, commandName, argStrategy]);
+  }, [objective, scope, namespace, commandName, argStrategy, mcpServers]);
 
   const handleSendMessage = useCallback(async (userInput: string) => {
     const newMessages: Message[] = [...messages, { role: 'user', content: userInput }];
@@ -71,6 +72,7 @@ const App: React.FC = () => {
                   namespace={namespace} setNamespace={setNamespace}
                   commandName={commandName} setCommandName={setCommandName}
                   argStrategy={argStrategy} setArgStrategy={setArgStrategy}
+                  mcpServers={mcpServers} setMcpServers={setMcpServers}
                   onBack={handleBackToObjective}
                   onGenerate={handleGenerate}
                 />;

@@ -22,6 +22,7 @@ export interface CommandConfig {
   namespace: string;
   commandName: string;
   argStrategy: ArgStrategy;
+  mcpServers: string[];
 }
 
 export interface Message {

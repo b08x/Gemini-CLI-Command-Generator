@@ -1,5 +1,6 @@
 import React from 'react';
 import { CommandScope, ArgStrategy } from '../types';
+import { MCP_SERVERS } from '../constants';
 
 interface ConfigStepProps {
   scope: CommandScope;
@@ -10,16 +11,26 @@ interface ConfigStepProps {
   setCommandName: (value: string) => void;
   argStrategy: ArgStrategy;
   setArgStrategy: (value: ArgStrategy) => void;
+  mcpServers: string[];
+  setMcpServers: (value: string[]) => void;
   onBack: () => void;
   onGenerate: () => void;
 }
 
 const ConfigStep: React.FC<ConfigStepProps> = ({
-  scope, setScope, namespace, setNamespace, commandName, setCommandName, argStrategy, setArgStrategy, onBack, onGenerate
+  scope, setScope, namespace, setNamespace, commandName, setCommandName, argStrategy, setArgStrategy, mcpServers, setMcpServers, onBack, onGenerate
 }) => {
   const isFormValid = namespace.trim() && commandName.trim();
   const scopePath = scope === CommandScope.Global ? '~/.gemini/commands/' : '[project]/.gemini/commands/';
   const fullPath = `${scopePath}${namespace}/${commandName}.toml`;
+
+  const handleMcpServerChange = (serverId: string) => {
+    setMcpServers(
+      mcpServers.includes(serverId)
+        ? mcpServers.filter(id => id !== serverId)
+        : [...mcpServers, serverId]
+    );
+  };
 
   return (
     <div className="flex flex-col gap-8 animate-fade-in">
@@ -75,6 +86,28 @@ const ConfigStep: React.FC<ConfigStepProps> = ({
               </label>
             ))}
           </div>
+      </div>
+
+      {/* MCP Server Integration */}
+      <div>
+        <h3 className="font-semibold text-lg mb-2 text-[#e2a32d]">MCP Server Integration (Optional)</h3>
+        <p className="text-sm text-[#95aac0] mb-4">Select any MCP servers your command should be aware of. This will guide the AI to integrate their capabilities into the prompt.</p>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {MCP_SERVERS.map(server => (
+            <label key={server.id} className="flex flex-col p-4 bg-[#333e48] rounded-lg border-2 border-[#5c6f7e] has-[:checked]:border-[#e2a32d] cursor-pointer transition-colors">
+              <div className="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={mcpServers.includes(server.id)}
+                  onChange={() => handleMcpServerChange(server.id)}
+                  className="w-5 h-5 accent-[#e2a32d] bg-[#333e48] border-[#5c6f7e] rounded"
+                />
+                <span className="ml-3 font-bold text-gray-200">{server.name}</span>
+              </div>
+              <p className="text-sm text-[#95aac0] mt-2">{server.description}</p>
+            </label>
+          ))}
+        </div>
       </div>
 
       <div className="flex justify-between items-center mt-4">

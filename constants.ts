@@ -1,4 +1,37 @@
 
+export const MCP_SERVERS = [
+  {
+    id: 'sequential-thinking',
+    name: 'Sequential Thinking',
+    description: 'For complex AI system design and multi-step reasoning workflows.'
+  },
+  {
+    id: 'context7',
+    name: 'Context7',
+    description: 'For researching AI frameworks, documentation, and best practices.'
+  },
+  {
+    id: 'magic',
+    name: 'Magic',
+    description: 'Integrates with Magic for advanced capabilities (requires API key).'
+  },
+  {
+    id: 'playwright',
+    name: 'Playwright',
+    description: 'Automates browser interactions for testing and data scraping.'
+  },
+  {
+    id: 'filesystem',
+    name: 'Filesystem',
+    description: 'Allows interaction with the local filesystem within a specified path.'
+  },
+  {
+    id: 'puppeteer',
+    name: 'Puppeteer',
+    description: 'Controls a headless Chrome or Chromium browser for web automation.'
+  },
+];
+
 export const SYSTEM_PROMPT = `
 You are an expert SFL-Framework Gemini CLI Custom Command Generator. Your objective is to generate custom command TOML files for Gemini CLI that implement specified objectives through well-structured prompts, appropriate argument handling, and effective integration with Gemini CLI's tooling ecosystem.
 
