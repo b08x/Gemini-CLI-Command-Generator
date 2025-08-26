@@ -68,7 +68,19 @@ export const generateInitialToml = async (config: CommandConfig): Promise<string
     return response.text.trim();
   } catch (error) {
     console.error("Error generating initial TOML:", error);
-    return `# Error: Could not generate TOML file. Please check your API key and network connection.\n# ${error instanceof Error ? error.message : String(error)}`;
+    let detailedError = "An unknown error occurred. Please check the browser console for details.";
+    if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+            detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
+        } else if (error.message.toLowerCase().includes('fetch')) {
+             detailedError = "A network error occurred. Please check your internet connection and try again.";
+        } else {
+            detailedError = error.message;
+        }
+    } else {
+        detailedError = String(error);
+    }
+    return `# ERROR: Failed to generate the command TOML.\n#\n# Reason: ${detailedError}`;
   }
 };
 
@@ -114,16 +126,21 @@ export const refineToml = async (currentToml: string, messages: Message[]): Prom
         return response.text.trim();
     } catch (error) {
         console.error("Error refining TOML:", error);
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        const originalFileName = currentToml.match(/#\s*(.*\.toml)/)?.[1] || 'command.toml';
+        let detailedError = "An unknown error occurred. Please check the browser console for details.";
+        if (error instanceof Error) {
+            if (error.message.includes('API key')) {
+                detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
+            } else if (error.message.toLowerCase().includes('fetch')) {
+                detailedError = "A network error occurred. Please check your internet connection and try again.";
+            } else {
+                detailedError = error.message;
+            }
+        } else {
+            detailedError = String(error);
+        }
 
-        return `# Error: Could not refine the TOML file.
-# ${errorMessage}
-#
-# Your original file content is preserved below.
-# ${originalFileName}
-
-${currentToml.split('\n').slice(1).join('\n')}
-`;
+        const errorHeader = `# ERROR: The AI failed to refine the command.\n#\n# Reason: ${detailedError}\n#\n# Your previous version has been preserved below.`;
+        
+        return `${errorHeader}\n\n${currentToml}`;
     }
 };
