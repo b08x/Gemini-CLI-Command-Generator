@@ -11,8 +11,11 @@ interface RefineStepProps {
   onSendMessage: (message: string) => void;
   isLoading: boolean;
   onBack: () => void;
+  onGoHome: () => void;
   onUndo: () => void;
   canUndo: boolean;
+  onRedo: () => void;
+  canRedo: boolean;
   commandName: string;
   namespace: string;
 }
@@ -24,9 +27,10 @@ const LoadingSpinner: React.FC = () => (
 );
 
 const RefineStep: React.FC<RefineStepProps> = ({
-  tomlContent, previousTomlContent, messages, onSendMessage, isLoading, onBack, onUndo, canUndo, commandName, namespace
+  tomlContent, previousTomlContent, messages, onSendMessage, isLoading, onBack, onGoHome, onUndo, canUndo, onRedo, canRedo, commandName, namespace
 }) => {
   const [userInput, setUserInput] = useState('');
+  const [isCopied, setIsCopied] = useState(false);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const handleSend = () => {
@@ -34,6 +38,17 @@ const RefineStep: React.FC<RefineStepProps> = ({
       onSendMessage(userInput);
       setUserInput('');
     }
+  };
+
+  const handleCopy = () => {
+    if (!tomlContent) return;
+    navigator.clipboard.writeText(tomlContent).then(() => {
+      setIsCopied(true);
+      setTimeout(() => setIsCopied(false), 2000);
+    }).catch(err => {
+      console.error("Failed to copy TOML content: ", err);
+      alert("Failed to copy to clipboard.");
+    });
   };
 
   const handleDownload = () => {
@@ -58,23 +73,54 @@ const RefineStep: React.FC<RefineStepProps> = ({
       <div className="flex flex-col bg-[#333e48] rounded-lg border border-[#5c6f7e] overflow-hidden">
         <div className="flex justify-between items-center p-3 bg-[#212934] border-b border-[#5c6f7e]">
            <div className="flex items-center gap-2">
+             <button onClick={onGoHome} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
+               <Icon path="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" className="w-5 h-5" />
+               Home
+             </button>
              <button onClick={onBack} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
                <Icon path="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" className="w-5 h-5" />
-               Back
-             </button>
-             <button onClick={onUndo} disabled={!canUndo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
-                <Icon path="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" className="w-5 h-5"/>
-                Undo
+               Back to Config
              </button>
            </div>
            <h3 className="font-mono text-sm text-green-400">{`${namespace}/${commandName}.toml`}</h3>
-           <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1 bg-[#c36e26] text-white font-semibold rounded-md hover:bg-[#b56524] transition-all text-sm">
-             <Icon path="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" className="w-5 h-5" />
-             Download
-           </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopy}
+                disabled={isLoading || !tomlContent}
+                className={`flex items-center gap-2 px-3 py-1 font-semibold rounded-md border transition-all text-sm ${
+                  isCopied
+                    ? 'bg-green-600 text-white border-green-500'
+                    : 'bg-[#333e48] text-gray-200 border-[#5c6f7e] hover:bg-[#5c6f7e]'
+                }`}
+              >
+                <Icon
+                  path={
+                    isCopied
+                      ? 'M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z' // Checkmark
+                      : 'M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-5zm0 16H8V7h11v14z' // Copy
+                  }
+                  className="w-5 h-5"
+                />
+                {isCopied ? 'Copied!' : 'Copy'}
+              </button>
+              <button onClick={handleDownload} className="flex items-center gap-2 px-3 py-1 bg-[#c36e26] text-white font-semibold rounded-md hover:bg-[#b56524] transition-all text-sm">
+                <Icon path="M19.35 10.04C18.67 6.59 15.64 4 12 4 9.11 4 6.6 5.64 5.35 8.04 2.34 8.36 0 10.91 0 14c0 3.31 2.69 6 6 6h13c2.76 0 5-2.24 5-5 0-2.64-2.05-4.78-4.65-4.96zM17 13l-5 5-5-5h3V9h4v4h3z" className="w-5 h-5" />
+                Download
+              </button>
+           </div>
         </div>
         <div className="flex-grow p-2 min-h-0">
             <TomlViewer newToml={tomlContent} oldToml={previousTomlContent} />
+        </div>
+        <div className="flex justify-end items-center gap-2 p-3 bg-[#212934] border-t border-[#5c6f7e]">
+            <button onClick={onUndo} disabled={!canUndo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
+                <Icon path="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" className="w-5 h-5"/>
+                Undo
+             </button>
+             <button onClick={onRedo} disabled={!canRedo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
+                <Icon path="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z" className="w-5 h-5"/>
+                Redo
+             </button>
         </div>
       </div>
       

@@ -6,6 +6,11 @@ import RefineStep from './components/RefineStep';
 import Icon from './components/Icon';
 import { generateInitialToml, refineToml } from './services/geminiService';
 
+interface HistoryEntry {
+  toml: string;
+  messages: Message[];
+}
+
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<WizardStep>(WizardStep.Objective);
 
@@ -17,21 +22,48 @@ const App: React.FC = () => {
   const [argStrategy, setArgStrategy] = useState<ArgStrategy>(ArgStrategy.Injection);
   const [mcpServers, setMcpServers] = useState<string[]>([]);
   
-  // State for generated content and chat
-  const [tomlHistory, setTomlHistory] = useState<string[]>([]);
-  const [messages, setMessages] = useState<Message[]>([]);
+  // State for generated content and chat history
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [historyIndex, setHistoryIndex] = useState<number>(-1);
   const [isLoading, setIsLoading] = useState<boolean>(false);
 
-  const currentToml = tomlHistory[tomlHistory.length - 1] || '';
-  const previousToml = tomlHistory.length > 1 ? tomlHistory[tomlHistory.length - 2] : null;
-  
+  // Derived state from history
+  const currentHistoryEntry = history[historyIndex];
+  const tomlContent = currentHistoryEntry?.toml || '';
+  const messages = currentHistoryEntry?.messages || [];
+  const previousTomlContent = historyIndex > 0 ? history[historyIndex - 1].toml : null;
+  const canUndo = historyIndex > 0;
+  const canRedo = historyIndex < history.length - 1;
+
   const handleNextFromObjective = () => setCurrentStep(WizardStep.Config);
   
   const handleBackToObjective = () => setCurrentStep(WizardStep.Objective);
   
+  const handleGoHome = () => {
+    const hasChanges = history.length > 1;
+    if (hasChanges) {
+      const confirmed = window.confirm(
+        "You have unsaved changes that will be lost. Are you sure you want to exit to the home screen?"
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    // Reset state to initial values
+    setObjective('');
+    setScope(CommandScope.Global);
+    setNamespace('');
+    setCommandName('');
+    setArgStrategy(ArgStrategy.Injection);
+    setMcpServers([]);
+    setHistory([]);
+    setHistoryIndex(-1);
+    setCurrentStep(WizardStep.Objective);
+  };
+
   const handleBackToConfig = () => {
-      setMessages([]);
-      setTomlHistory([]);
+      setHistory([]);
+      setHistoryIndex(-1);
       setCurrentStep(WizardStep.Config);
   };
 
@@ -40,27 +72,48 @@ const App: React.FC = () => {
     setCurrentStep(WizardStep.Refine);
     const config: CommandConfig = { objective, scope, namespace, commandName, argStrategy, mcpServers };
     const generatedToml = await generateInitialToml(config);
-    setTomlHistory([generatedToml]);
+    setHistory([{ toml: generatedToml, messages: [] }]);
+    setHistoryIndex(0);
     setIsLoading(false);
   }, [objective, scope, namespace, commandName, argStrategy, mcpServers]);
 
   const handleSendMessage = useCallback(async (userInput: string) => {
-    const newMessages: Message[] = [...messages, { role: 'user', content: userInput }];
-    setMessages(newMessages);
+    if (!currentHistoryEntry) return;
+    
     setIsLoading(true);
 
-    const refinedToml = await refineToml(currentToml, newMessages);
-    setTomlHistory(prev => [...prev, refinedToml]);
-    setMessages([...newMessages, { role: 'model', content: "I have updated the TOML based on your request. Any other changes?" }]);
+    const userMessage: Message = { role: 'user', content: userInput };
+    const apiMessages = [...currentHistoryEntry.messages, userMessage];
+    
+    const refinedToml = await refineToml(currentHistoryEntry.toml, apiMessages);
+
+    const modelMessage: Message = { role: 'model', content: "I have updated the TOML based on your request. Any other changes?" };
+    const newFullMessages = [...apiMessages, modelMessage];
+    
+    const newEntry: HistoryEntry = {
+      toml: refinedToml,
+      messages: newFullMessages,
+    };
+    
+    const newHistory = [...history.slice(0, historyIndex + 1), newEntry];
+    setHistory(newHistory);
+    setHistoryIndex(newHistory.length - 1);
     
     setIsLoading(false);
-  }, [messages, currentToml]);
-
+  }, [history, historyIndex, currentHistoryEntry]);
+  
   const handleUndo = () => {
-    if (tomlHistory.length > 1) {
-      setTomlHistory(prev => prev.slice(0, -1));
+    if (canUndo) {
+      setHistoryIndex(historyIndex - 1);
     }
   };
+
+  const handleRedo = () => {
+    if (canRedo) {
+      setHistoryIndex(historyIndex + 1);
+    }
+  };
+
 
   const renderStep = () => {
     switch (currentStep) {
@@ -78,14 +131,17 @@ const App: React.FC = () => {
                 />;
       case WizardStep.Refine:
         return <RefineStep 
-                 tomlContent={currentToml}
-                 previousTomlContent={previousToml}
+                 tomlContent={tomlContent}
+                 previousTomlContent={previousTomlContent}
                  messages={messages}
                  onSendMessage={handleSendMessage}
                  isLoading={isLoading}
                  onBack={handleBackToConfig}
+                 onGoHome={handleGoHome}
                  onUndo={handleUndo}
-                 canUndo={tomlHistory.length > 1}
+                 canUndo={canUndo}
+                 onRedo={handleRedo}
+                 canRedo={canRedo}
                  commandName={commandName}
                  namespace={namespace}
                 />;
@@ -107,7 +163,7 @@ const App: React.FC = () => {
       </header>
       
       <main className="flex-grow bg-[#333e48] p-6 rounded-xl border border-[#5c6f7e] shadow-2xl shadow-black/20">
-        {isLoading && currentStep === WizardStep.Refine && !messages.length ? (
+        {isLoading && currentStep === WizardStep.Refine && historyIndex === -1 ? (
           <div className="flex flex-col items-center justify-center h-full gap-4">
             <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#e2a32d]"></div>
             <p className="text-lg text-gray-200">Generating your command...</p>
