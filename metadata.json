@@ -1,0 +1,5 @@
+{
+  "name": "Gemini CLI Command Generator",
+  "description": "An interactive wizard to generate, refine, and export custom command TOML files for the Gemini CLI using a guided workflow and conversational AI.",
+  "requestFramePermissions": []
+}
