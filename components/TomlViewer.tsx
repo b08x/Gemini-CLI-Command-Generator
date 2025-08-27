@@ -1,26 +1,39 @@
 import React from 'react';
 import { diffLines } from 'diff';
 import Icon from './Icon';
+import { TomlValidationResult } from '../services/tomlValidationService';
 
 interface TomlViewerProps {
   newToml: string;
   oldToml: string | null;
+  validationResult: TomlValidationResult;
 }
 
-const TomlViewer: React.FC<TomlViewerProps> = ({ newToml, oldToml }) => {
+const TomlViewer: React.FC<TomlViewerProps> = ({ newToml, oldToml, validationResult }) => {
   const isErrorState = newToml.trim().startsWith('# ERROR:');
+  const isInvalidToml = !validationResult.isValid;
+
   // If oldToml is null (initial generation), compare newToml to itself to show no changes.
   const changes = diffLines(oldToml ?? newToml, newToml);
 
   const containerClasses = `w-full h-full font-mono text-sm bg-[#212934] border rounded-lg overflow-hidden flex flex-col
-    ${isErrorState ? 'border-red-500/50' : 'border-[#5c6f7e]'}`;
+    ${isErrorState ? 'border-red-500/50' : isInvalidToml ? 'border-yellow-500/50' : 'border-[#5c6f7e]'}`;
 
   return (
     <div className={containerClasses}>
       {isErrorState && (
         <div className="flex items-center gap-3 p-3 bg-red-900/40 text-red-200 border-b border-red-500/50 flex-shrink-0">
-          <Icon path="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" className="w-6 h-6" />
+          <Icon path="M12 2L1 21h22L12 2zm0 16c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-4v-4h2v4h-2z" className="w-6 h-6" />
           <h3 className="font-bold text-base">Generation Failed</h3>
+        </div>
+      )}
+      {isInvalidToml && !isErrorState && (
+         <div className="flex items-center gap-3 p-3 bg-yellow-900/40 text-yellow-200 border-b border-yellow-500/50 flex-shrink-0">
+          <Icon path="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z" className="w-6 h-6" />
+          <div>
+            <h3 className="font-bold text-base">Structure Warning</h3>
+            <p className="text-sm">{validationResult.message}</p>
+          </div>
         </div>
       )}
       <div className="flex-grow overflow-auto p-4">

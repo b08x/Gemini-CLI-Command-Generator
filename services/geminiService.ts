@@ -1,6 +1,7 @@
+
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { CommandConfig, Message } from '../types';
-import { SYSTEM_PROMPT, MCP_SERVERS } from '../constants';
+import { SYSTEM_PROMPT, MCP_SERVERS, VARIANT_SYSTEM_PROMPT, TEMPLATE_DESCRIPTION_SYSTEM_PROMPT } from '../constants';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash';
@@ -142,5 +143,94 @@ export const refineToml = async (currentToml: string, messages: Message[]): Prom
         const errorHeader = `# ERROR: The AI failed to refine the command.\n#\n# Reason: ${detailedError}\n#\n# Your previous version has been preserved below.`;
         
         return `${errorHeader}\n\n${currentToml}`;
+    }
+};
+
+function constructVariantPrompt(baseToml: string, objective: string, config: CommandConfig): string {
+  const scopePath = config.scope === 'Global' ? '~/.gemini/commands/' : '[project]/.gemini/commands/';
+  const fullPath = `${scopePath}${config.namespace}/${config.commandName}.toml`;
+
+  const mcpIntegrationSection = config.mcpServers && config.mcpServers.length > 0
+    ? `
+- **MCP Integration**: The user has indicated the command should be aware of the following MCP servers: ${config.mcpServers.join(', ')}. Integrate them into the prompt's capabilities and instructions where relevant.`
+    : '';
+
+  return `
+Please generate a new variant of the following Gemini CLI command based on the new objective and specifications.
+
+**Base TOML File (Your Starting Point):**
+\`\`\`toml
+${baseToml}
+\`\`\`
+
+**New Objective for the Variant:**
+"${objective}"
+
+**New Command Specifications:**
+- **New Scope**: ${config.scope}
+- **New File Path**: \`${fullPath}\`
+- **New Argument Strategy**: ${config.argStrategy}
+${mcpIntegrationSection}
+
+**Your Task:**
+Modify the base TOML to create a new command that accomplishes the new objective and conforms to the new specifications.
+- Update the file path comment at the top of the file to \`# ${fullPath}\`.
+- Update the 'description' to match the new objective.
+- Update the 'prompt' to implement the new objective and respect the new argument strategy.
+
+Return only the raw, complete, and valid TOML for the new variant.
+`;
+}
+
+export const generateVariantFromTemplate = async (baseToml: string, objective: string, config: CommandConfig): Promise<string> => {
+  try {
+    const prompt = constructVariantPrompt(baseToml, objective, config);
+    const response: GenerateContentResponse = await ai.models.generateContent({
+      model: model,
+      contents: prompt,
+      config: {
+        systemInstruction: VARIANT_SYSTEM_PROMPT,
+      },
+    });
+    return response.text.trim();
+  } catch (error) {
+    console.error("Error generating variant TOML:", error);
+    let detailedError = "An unknown error occurred. Please check the browser console for details.";
+    if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+            detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
+        } else if (error.message.toLowerCase().includes('fetch')) {
+             detailedError = "A network error occurred. Please check your internet connection and try again.";
+        } else {
+            detailedError = error.message;
+        }
+    } else {
+        detailedError = String(error);
+    }
+    return `# ERROR: Failed to generate the command variant.\n#\n# Reason: ${detailedError}`;
+  }
+};
+
+export const generateTemplateDescription = async (toml: string): Promise<string> => {
+    try {
+        const prompt = `
+        Here is the TOML file for the command. Please generate the description.
+
+        \`\`\`toml
+        ${toml}
+        \`\`\`
+        `;
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+                systemInstruction: TEMPLATE_DESCRIPTION_SYSTEM_PROMPT,
+            },
+        });
+        return response.text.trim();
+    } catch (error) {
+        console.error("Error generating template description:", error);
+        // Return a sensible default on error
+        return "A reusable command template for the Gemini CLI.";
     }
 };

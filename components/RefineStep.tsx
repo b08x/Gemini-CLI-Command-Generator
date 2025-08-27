@@ -3,6 +3,7 @@ import { Message } from '../types';
 import TomlViewer from './TomlViewer';
 import ChatMessage from './ChatMessage';
 import Icon from './Icon';
+import { validateToml, TomlValidationResult } from '../services/tomlValidationService';
 
 interface RefineStepProps {
   tomlContent: string;
@@ -18,6 +19,7 @@ interface RefineStepProps {
   canRedo: boolean;
   commandName: string;
   namespace: string;
+  onSaveAsTemplate: () => void;
 }
 
 const LoadingSpinner: React.FC = () => (
@@ -27,11 +29,18 @@ const LoadingSpinner: React.FC = () => (
 );
 
 const RefineStep: React.FC<RefineStepProps> = ({
-  tomlContent, previousTomlContent, messages, onSendMessage, isLoading, onBack, onGoHome, onUndo, canUndo, onRedo, canRedo, commandName, namespace
+  tomlContent, previousTomlContent, messages, onSendMessage, isLoading, onBack, onGoHome, onUndo, canUndo, onRedo, canRedo, commandName, namespace, onSaveAsTemplate
 }) => {
   const [userInput, setUserInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
+  const [validationResult, setValidationResult] = useState<TomlValidationResult>({ isValid: true, message: null });
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (tomlContent) {
+      setValidationResult(validateToml(tomlContent));
+    }
+  }, [tomlContent]);
 
   const handleSend = () => {
     if (userInput.trim()) {
@@ -77,13 +86,13 @@ const RefineStep: React.FC<RefineStepProps> = ({
                <Icon path="M10 20v-6h4v6h5v-8h3L12 3 2 12h3v8z" className="w-5 h-5" />
                Home
              </button>
-             <button onClick={onBack} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
-               <Icon path="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" className="w-5 h-5" />
-               Back to Config
-             </button>
            </div>
            <h3 className="font-mono text-sm text-green-400">{`${namespace}/${commandName}.toml`}</h3>
             <div className="flex items-center gap-2">
+              <button onClick={onSaveAsTemplate} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
+                <Icon path="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" className="w-5 h-5"/>
+                Save as Template
+              </button>
               <button
                 onClick={handleCopy}
                 disabled={isLoading || !tomlContent}
@@ -110,17 +119,23 @@ const RefineStep: React.FC<RefineStepProps> = ({
            </div>
         </div>
         <div className="flex-grow p-2 min-h-0">
-            <TomlViewer newToml={tomlContent} oldToml={previousTomlContent} />
+            <TomlViewer newToml={tomlContent} oldToml={previousTomlContent} validationResult={validationResult} />
         </div>
-        <div className="flex justify-end items-center gap-2 p-3 bg-[#212934] border-t border-[#5c6f7e]">
-            <button onClick={onUndo} disabled={!canUndo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
-                <Icon path="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" className="w-5 h-5"/>
-                Undo
+        <div className="flex justify-between items-center p-3 bg-[#212934] border-t border-[#5c6f7e]">
+             <button onClick={onBack} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
+               <Icon path="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" className="w-5 h-5" />
+               Back to Config
              </button>
-             <button onClick={onRedo} disabled={!canRedo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
-                <Icon path="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z" className="w-5 h-5"/>
-                Redo
-             </button>
+            <div className="flex items-center gap-2">
+                <button onClick={onUndo} disabled={!canUndo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
+                    <Icon path="M12.5 8c-2.65 0-5.05.99-6.9 2.6L2 7v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z" className="w-5 h-5"/>
+                    Undo
+                 </button>
+                 <button onClick={onRedo} disabled={!canRedo || isLoading} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] disabled:bg-[#333e48] disabled:text-[#95aac0] disabled:cursor-not-allowed disabled:border-[#5c6f7e] transition-all text-sm">
+                    <Icon path="M18.4 10.6C16.55 8.99 14.15 8 11.5 8c-4.65 0-8.58 3.03-9.96 7.22L3.9 16c1.05-3.19 4.05-5.5 7.6-5.5 1.95 0 3.73.72 5.12 1.88L13 16h9V7l-3.6 3.6z" className="w-5 h-5"/>
+                    Redo
+                 </button>
+            </div>
         </div>
       </div>
       

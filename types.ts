@@ -1,7 +1,10 @@
 
 export enum WizardStep {
+  Home,
   Objective,
   Config,
+  SelectTemplate,
+  VariantObjective,
   Refine,
 }
 
@@ -28,4 +31,11 @@ export interface CommandConfig {
 export interface Message {
   role: 'user' | 'model';
   content: string;
+}
+
+export interface Template {
+  id: string;
+  name: string;
+  description: string;
+  toml: string;
 }
