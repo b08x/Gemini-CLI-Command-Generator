@@ -16,6 +16,7 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
+  const [tagInput, setTagInput] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -25,6 +26,7 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
       setName('');
       setDescription('');
       setTags([]);
+      setTagInput('');
       setError(null);
 
       // Generate description and tags in parallel
@@ -65,6 +67,34 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
     }
   };
 
+  const handleRemoveTag = (tagToRemove: string) => {
+    setTags(currentTags => currentTags.filter(tag => tag !== tagToRemove));
+  };
+
+  const handleAddTags = (input: string) => {
+    const newTags = input
+      .split(',')
+      .map(t => t.trim().toLowerCase())
+      .filter(t => t && !tags.includes(t)); // Filter out empty and duplicate tags
+
+    if (newTags.length > 0) {
+      setTags(currentTags => [...currentTags, ...newTags]);
+    }
+    setTagInput('');
+  };
+
+  const handleTagInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === ',' || e.key === 'Enter') {
+      e.preventDefault();
+      if (tagInput.trim()) {
+        handleAddTags(tagInput);
+      }
+    } else if (e.key === 'Backspace' && !tagInput && tags.length > 0) {
+      // Optional: remove last tag on backspace when input is empty
+      handleRemoveTag(tags[tags.length - 1]);
+    }
+  };
+  
   const placeholderText = isGenerating ? "Generating AI metadata..." : "A short description of what this command template does.";
 
   return (
@@ -100,16 +130,34 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
               disabled={isGenerating}
             />
           </div>
-          { !isGenerating && tags.length > 0 && (
-             <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">Generated Tags</label>
-                <div className="flex flex-wrap gap-2 p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg">
-                    {tags.map(tag => (
-                        <span key={tag} className="px-2.5 py-1 bg-[#5c6f7e]/50 text-sm font-medium text-gray-200 rounded-full capitalize">{tag}</span>
-                    ))}
-                </div>
-             </div>
-          )}
+          <div>
+            <label htmlFor="template-tags" className="block text-sm font-medium text-gray-300 mb-2">Tags</label>
+            <div className="flex flex-wrap items-center gap-2 p-2 bg-[#212934] border border-[#5c6f7e] rounded-lg focus-within:ring-2 focus-within:ring-[#e2a32d]">
+                {tags.map(tag => (
+                    <div key={tag} className="flex items-center gap-1.5 px-2.5 py-1 bg-[#5c6f7e]/50 text-sm font-medium text-gray-200 rounded-full capitalize">
+                        <span>{tag}</span>
+                        <button
+                            onClick={() => handleRemoveTag(tag)}
+                            className="rounded-full hover:bg-black/20 flex items-center justify-center"
+                            aria-label={`Remove ${tag} tag`}
+                        >
+                            <Icon path="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" className="w-3 h-3 text-gray-400" />
+                        </button>
+                    </div>
+                ))}
+                <input
+                    id="template-tags"
+                    type="text"
+                    value={tagInput}
+                    onChange={(e) => setTagInput(e.target.value)}
+                    onKeyDown={handleTagInputKeyDown}
+                    placeholder={isGenerating ? "" : "Add a tag..."}
+                    className="flex-grow p-1 bg-transparent outline-none placeholder:text-[#95aac0] min-w-[100px] text-sm"
+                    disabled={isGenerating}
+                />
+            </div>
+             <p className="text-xs text-[#95aac0] mt-2">Enter a tag and press Enter or comma to add it.</p>
+          </div>
         </div>
         <div className="flex justify-end gap-4 mt-8">
           <button onClick={onClose} className="px-6 py-2 bg-[#5c6f7e] text-white font-semibold rounded-lg hover:bg-[#95aac0] transition-all">
