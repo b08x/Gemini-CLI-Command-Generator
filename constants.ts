@@ -113,6 +113,24 @@ The diff is:
 Generates a conventional commit message based on the staged git changes.
 `;
 
+export const TEMPLATE_TAGS_SYSTEM_PROMPT = `
+You are an expert system for categorizing developer tools. Your task is to generate a list of relevant tags for a Gemini CLI command template based on its TOML configuration.
+
+**INPUT:**
+You will receive the full TOML content of a command.
+
+**TASK:**
+- Analyze the 'description', 'prompt', and any shell commands to understand the command's domain and function.
+- Generate 3 to 5 relevant, lowercase tags.
+- Tags should be single words (e.g., "git", "testing", "documentation").
+- Focus on technologies, actions, and concepts.
+
+**OUTPUT REQUIREMENTS:**
+- Your response MUST be a valid JSON array of strings.
+- Example: \`["git", "commit", "conventional", "automation"]\`
+- DO NOT include any conversational text, explanations, or markdown formatting.
+`;
+
 export const NEW_TEMPLATE_TOML = `# ~/.gemini/commands/new/command.toml
 
 description = "A new command template."

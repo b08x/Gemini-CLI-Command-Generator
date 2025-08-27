@@ -2,12 +2,12 @@
 import React, { useState, useEffect } from 'react';
 import Icon from './Icon';
 import { Template } from '../types';
-import { generateTemplateDescription } from '../services/geminiService';
+import { generateTemplateDescription, generateTemplateTags } from '../services/geminiService';
 
 interface SaveTemplateModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSave: (name: string, description: string) => void;
+  onSave: (name: string, description: string, tags: string[]) => void;
   templates: Template[];
   tomlContent: string;
 }
@@ -15,21 +15,33 @@ interface SaveTemplateModalProps {
 const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, onSave, templates, tomlContent }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
+  const [tags, setTags] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [isGeneratingDesc, setIsGeneratingDesc] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
 
   useEffect(() => {
     if (isOpen) {
       // Reset fields when opening
       setName('');
       setDescription('');
+      setTags([]);
       setError(null);
 
-      // Generate description
-      setIsGeneratingDesc(true);
-      generateTemplateDescription(tomlContent).then(generatedDesc => {
+      // Generate description and tags in parallel
+      setIsGenerating(true);
+      Promise.all([
+        generateTemplateDescription(tomlContent),
+        generateTemplateTags(tomlContent)
+      ]).then(([generatedDesc, generatedTags]) => {
         setDescription(generatedDesc);
-        setIsGeneratingDesc(false);
+        setTags(generatedTags);
+      }).catch(err => {
+        console.error("Failed to generate metadata", err);
+        // Provide default values on failure
+        setDescription("A reusable command template for the Gemini CLI.");
+        setTags([]);
+      }).finally(() => {
+        setIsGenerating(false);
       });
     }
   }, [isOpen, tomlContent]);
@@ -48,10 +60,12 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
   };
 
   const handleSave = () => {
-    if (name.trim() && description.trim() && !error && !isGeneratingDesc) {
-      onSave(name.trim(), description.trim());
+    if (name.trim() && description.trim() && !error && !isGenerating) {
+      onSave(name.trim(), description.trim(), tags);
     }
   };
+
+  const placeholderText = isGenerating ? "Generating AI metadata..." : "A short description of what this command template does.";
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>
@@ -81,11 +95,21 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
               id="template-desc"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder={isGeneratingDesc ? "Generating AI description..." : "A short description of what this command template does."}
+              placeholder={placeholderText}
               className="w-full h-24 p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg outline-none focus:ring-2 focus:ring-[#e2a32d] placeholder:text-[#95aac0] resize-y"
-              disabled={isGeneratingDesc}
+              disabled={isGenerating}
             />
           </div>
+          { !isGenerating && tags.length > 0 && (
+             <div>
+                <label className="block text-sm font-medium text-gray-300 mb-2">Generated Tags</label>
+                <div className="flex flex-wrap gap-2 p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg">
+                    {tags.map(tag => (
+                        <span key={tag} className="px-2.5 py-1 bg-[#5c6f7e]/50 text-sm font-medium text-gray-200 rounded-full capitalize">{tag}</span>
+                    ))}
+                </div>
+             </div>
+          )}
         </div>
         <div className="flex justify-end gap-4 mt-8">
           <button onClick={onClose} className="px-6 py-2 bg-[#5c6f7e] text-white font-semibold rounded-lg hover:bg-[#95aac0] transition-all">
@@ -93,10 +117,10 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
           </button>
           <button
             onClick={handleSave}
-            disabled={!name.trim() || !description.trim() || !!error || isGeneratingDesc}
+            disabled={!name.trim() || !description.trim() || !!error || isGenerating}
             className="px-6 py-2 bg-[#c36e26] text-white font-semibold rounded-lg hover:bg-[#b56524] disabled:bg-[#5c6f7e] disabled:cursor-not-allowed transition-all"
           >
-            Save Template
+            {isGenerating ? 'Generating...' : 'Save Template'}
           </button>
         </div>
       </div>

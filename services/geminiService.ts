@@ -1,7 +1,7 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
 import { CommandConfig, Message } from '../types';
-import { SYSTEM_PROMPT, MCP_SERVERS, VARIANT_SYSTEM_PROMPT, TEMPLATE_DESCRIPTION_SYSTEM_PROMPT } from '../constants';
+import { SYSTEM_PROMPT, MCP_SERVERS, VARIANT_SYSTEM_PROMPT, TEMPLATE_DESCRIPTION_SYSTEM_PROMPT, TEMPLATE_TAGS_SYSTEM_PROMPT } from '../constants';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash';
@@ -232,5 +232,39 @@ export const generateTemplateDescription = async (toml: string): Promise<string>
         console.error("Error generating template description:", error);
         // Return a sensible default on error
         return "A reusable command template for the Gemini CLI.";
+    }
+};
+
+export const generateTemplateTags = async (toml: string): Promise<string[]> => {
+    try {
+        const prompt = `
+        Here is the TOML file for the command. Please generate the tags.
+        \`\`\`toml
+        ${toml}
+        \`\`\`
+        `;
+        const response: GenerateContentResponse = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+                systemInstruction: TEMPLATE_TAGS_SYSTEM_PROMPT,
+                responseMimeType: "application/json",
+            },
+        });
+        
+        const responseText = response.text.trim();
+        // The response should be a JSON array string, e.g., '["git", "commit"]'
+        // Add robust parsing to handle potential API deviations.
+        const cleanedText = responseText.replace(/^```json\s*|```\s*$/g, '').trim();
+        const tags = JSON.parse(cleanedText);
+        
+        if (Array.isArray(tags) && tags.every(t => typeof t === 'string')) {
+            return tags;
+        }
+        return [];
+    } catch (error) {
+        console.error("Error generating or parsing template tags:", error);
+        // Return an empty array on any error (API call, JSON parsing, etc.)
+        return [];
     }
 };

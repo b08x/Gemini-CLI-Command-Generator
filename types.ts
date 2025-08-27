@@ -39,4 +39,5 @@ export interface Template {
   name: string;
   description: string;
   toml: string;
+  tags?: string[];
 }

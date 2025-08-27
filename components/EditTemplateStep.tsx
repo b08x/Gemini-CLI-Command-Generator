@@ -15,12 +15,14 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description);
   const [toml, setToml] = useState(template.toml);
+  const [tags, setTags] = useState(template.tags || []);
   const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(template.name);
     setDescription(template.description);
     setToml(template.toml);
+    setTags(template.tags || []);
   }, [template]);
 
   const handleNameChange = (newName: string) => {
@@ -34,6 +36,11 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
       setNameError(null);
     }
   };
+
+  const handleTagsChange = (tagsString: string) => {
+    const tagsArray = tagsString.split(',').map(t => t.trim().toLowerCase()).filter(Boolean);
+    setTags(tagsArray);
+  }
   
   const handleSave = () => {
     if (name.trim() && description.trim() && toml.trim() && !nameError) {
@@ -41,7 +48,8 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
         ...template,
         name: name.trim(),
         description: description.trim(),
-        toml: toml.trim()
+        toml: toml.trim(),
+        tags,
       });
     }
   };
@@ -50,11 +58,9 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
-      <div className="flex justify-between items-center">
-        <div>
-          <h2 className="text-2xl font-bold text-[#e2a32d]">Edit Template</h2>
-          <p className="text-[#95aac0] mt-1">Modify the details of your saved command template.</p>
-        </div>
+      <div>
+        <h2 className="text-2xl font-bold text-[#e2a32d]">Edit Template</h2>
+        <p className="text-[#95aac0] mt-1">Modify the details of your saved command template.</p>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -80,6 +86,19 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
           />
         </div>
       </div>
+
+       <div>
+          <label htmlFor="template-tags" className="block text-sm font-medium text-gray-300 mb-2">Tags</label>
+          <input
+            id="template-tags"
+            type="text"
+            value={tags.join(', ')}
+            onChange={(e) => handleTagsChange(e.target.value)}
+            placeholder="e.g., git, documentation, refactor"
+            className="w-full p-3 bg-[#212934] border border-[#5c6f7e] rounded-lg outline-none focus:ring-2 focus:ring-[#e2a32d] placeholder:text-[#95aac0]"
+          />
+           <p className="text-xs text-[#95aac0] mt-2">Enter comma-separated tags for categorization.</p>
+        </div>
       
       <div className="flex flex-col">
           <label htmlFor="template-toml" className="block text-sm font-medium text-gray-300 mb-2">TOML Content</label>

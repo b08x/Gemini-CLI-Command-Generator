@@ -186,12 +186,13 @@ const App: React.FC = () => {
     if (canRedo) setHistoryIndex(historyIndex + 1);
   };
 
-  const handleSaveTemplate = (name: string, description: string) => {
+  const handleSaveTemplate = (name: string, description: string, tags: string[]) => {
     const newTemplate: Template = {
       id: Date.now().toString(),
       name,
       description,
       toml: tomlContent,
+      tags,
     };
     const updatedTemplates = [...templates, newTemplate];
     setTemplates(updatedTemplates);
@@ -221,6 +222,7 @@ const App: React.FC = () => {
       name: '',
       description: '',
       toml: NEW_TEMPLATE_TOML,
+      tags: [],
     };
     setEditingTemplate(newTemplate);
     setCurrentStep(WizardStep.EditTemplate);
@@ -241,7 +243,11 @@ const App: React.FC = () => {
   const renderStep = () => {
     switch (currentStep) {
       case WizardStep.Home:
-        return <HomeStep onStartFromScratch={() => setCurrentStep(WizardStep.Objective)} onStartFromTemplate={() => setCurrentStep(WizardStep.SelectTemplate)} />;
+        return <HomeStep 
+                  onStartFromScratch={() => setCurrentStep(WizardStep.Objective)} 
+                  onStartFromTemplate={() => setCurrentStep(WizardStep.SelectTemplate)}
+                  onViewTemplates={() => setCurrentStep(WizardStep.SelectTemplate)}
+                />;
       case WizardStep.Objective:
         return <ObjectiveStep objective={objective} setObjective={setObjective} onNext={() => setCurrentStep(WizardStep.Config)} onBack={() => setCurrentStep(WizardStep.Home)} />;
       case WizardStep.Config:
