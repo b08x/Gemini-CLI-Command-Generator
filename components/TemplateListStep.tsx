@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Template } from '../types';
 import Icon from './Icon';
@@ -5,10 +6,12 @@ import Icon from './Icon';
 interface TemplateListStepProps {
   templates: Template[];
   onSelectTemplate: (templateId: string) => void;
+  onEditTemplate: (templateId: string) => void;
+  onDeleteTemplate: (templateId: string) => void;
   onBack: () => void;
 }
 
-const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelectTemplate, onBack }) => {
+const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelectTemplate, onEditTemplate, onDeleteTemplate, onBack }) => {
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex justify-between items-center">
@@ -30,9 +33,27 @@ const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelect
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map((template) => (
-            <div key={template.id} className="flex flex-col bg-[#212934] rounded-lg border border-[#5c6f7e] hover:border-[#e2a32d] transition-colors">
-              <div className="p-6 flex-grow">
-                <h3 className="font-bold text-lg text-gray-200 truncate">{template.name}</h3>
+            <div key={template.id} className="group flex flex-col bg-[#212934] rounded-lg border border-[#5c6f7e] hover:border-[#e2a32d] transition-colors">
+               <div className="p-6 flex-grow">
+                <div className="flex justify-between items-start">
+                    <h3 className="font-bold text-lg text-gray-200 truncate pr-2">{template.name}</h3>
+                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                        <button
+                          onClick={() => onEditTemplate(template.id)}
+                          className="p-1.5 rounded-md hover:bg-[#5c6f7e]"
+                          aria-label={`Edit ${template.name}`}
+                        >
+                            <Icon path="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a.9959.9959 0 00-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" className="w-5 h-5 text-gray-300"/>
+                        </button>
+                        <button
+                          onClick={() => onDeleteTemplate(template.id)}
+                          className="p-1.5 rounded-md hover:bg-red-800/60"
+                           aria-label={`Delete ${template.name}`}
+                        >
+                            <Icon path="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z" className="w-5 h-5 text-red-300"/>
+                        </button>
+                    </div>
+                </div>
                 <p className="text-sm text-[#95aac0] mt-2 h-20 overflow-hidden text-ellipsis">{template.description}</p>
               </div>
               <div className="p-4 bg-[#333e48] border-t border-[#5c6f7e] rounded-b-lg">

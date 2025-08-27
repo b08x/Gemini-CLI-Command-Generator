@@ -6,6 +6,7 @@ export enum WizardStep {
   SelectTemplate,
   VariantObjective,
   Refine,
+  EditTemplate,
 }
 
 export enum CommandScope {

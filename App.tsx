@@ -8,6 +8,7 @@ import HomeStep from './components/HomeStep';
 import TemplateListStep from './components/TemplateListStep';
 import VariantObjectiveStep from './components/VariantObjectiveStep';
 import SaveTemplateModal from './components/SaveTemplateModal';
+import EditTemplateStep from './components/EditTemplateStep';
 import Icon from './components/Icon';
 import { generateInitialToml, refineToml, generateVariantFromTemplate } from './services/geminiService';
 import { getTemplates, saveTemplates } from './services/templateService';
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   // State for templates
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   
   useEffect(() => {
@@ -88,6 +90,7 @@ const App: React.FC = () => {
     setHistory([]);
     setHistoryIndex(-1);
     setSelectedTemplateId(null);
+    setEditingTemplateId(null);
   }
 
   const handleGoHome = () => {
@@ -195,6 +198,27 @@ const App: React.FC = () => {
     setIsSaveModalOpen(false);
   };
 
+  const handleDeleteTemplate = (id: string) => {
+    if (window.confirm('Are you sure you want to delete this template? This action cannot be undone.')) {
+      const updatedTemplates = templates.filter(t => t.id !== id);
+      setTemplates(updatedTemplates);
+      saveTemplates(updatedTemplates);
+    }
+  };
+
+  const handleStartEditTemplate = (id: string) => {
+    setEditingTemplateId(id);
+    setCurrentStep(WizardStep.EditTemplate);
+  };
+
+  const handleUpdateTemplate = (updatedTemplate: Template) => {
+    const updatedTemplates = templates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t);
+    setTemplates(updatedTemplates);
+    saveTemplates(updatedTemplates);
+    setEditingTemplateId(null);
+    setCurrentStep(WizardStep.SelectTemplate);
+  };
+
   const renderStep = () => {
     switch (currentStep) {
       case WizardStep.Home:
@@ -213,7 +237,13 @@ const App: React.FC = () => {
                   onGenerate={handleGenerate}
                 />;
       case WizardStep.SelectTemplate:
-        return <TemplateListStep templates={templates} onSelectTemplate={handleSelectTemplate} onBack={() => setCurrentStep(WizardStep.Home)} />;
+        return <TemplateListStep
+                 templates={templates}
+                 onSelectTemplate={handleSelectTemplate}
+                 onEditTemplate={handleStartEditTemplate}
+                 onDeleteTemplate={handleDeleteTemplate}
+                 onBack={() => setCurrentStep(WizardStep.Home)}
+               />;
       case WizardStep.VariantObjective: {
         const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
         if (!selectedTemplate) {
@@ -221,6 +251,20 @@ const App: React.FC = () => {
           return null;
         }
         return <VariantObjectiveStep template={selectedTemplate} objective={objective} setObjective={setObjective} onNext={() => setCurrentStep(WizardStep.Config)} onBack={() => setCurrentStep(WizardStep.SelectTemplate)} />
+      }
+      case WizardStep.EditTemplate: {
+        const templateToEdit = templates.find(t => t.id === editingTemplateId);
+        if (!templateToEdit) {
+            // Safety check, go back if template not found
+            setCurrentStep(WizardStep.SelectTemplate);
+            return null;
+        }
+        return <EditTemplateStep
+                    template={templateToEdit}
+                    onUpdate={handleUpdateTemplate}
+                    onCancel={() => setCurrentStep(WizardStep.SelectTemplate)}
+                    existingTemplates={templates}
+                />
       }
       case WizardStep.Refine:
         if (isLoading && historyIndex < 0) return null; // Prevents flashing old content on first load
