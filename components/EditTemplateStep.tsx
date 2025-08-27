@@ -49,7 +49,7 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
   const isSaveDisabled = !name.trim() || !description.trim() || !toml.trim() || !!nameError;
 
   return (
-    <div className="flex flex-col gap-6 animate-fade-in h-full">
+    <div className="flex flex-col gap-6 animate-fade-in">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-[#e2a32d]">Edit Template</h2>
@@ -81,11 +81,9 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
         </div>
       </div>
       
-      <div className="flex-grow flex flex-col min-h-0">
+      <div className="flex flex-col">
           <label htmlFor="template-toml" className="block text-sm font-medium text-gray-300 mb-2">TOML Content</label>
-          <div className="flex-grow">
-              <CodeEditor value={toml} onChange={setToml} />
-          </div>
+          <CodeEditor value={toml} onChange={setToml} />
       </div>
 
       <div className="flex justify-between items-center mt-4">

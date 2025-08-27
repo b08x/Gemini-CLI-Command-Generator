@@ -1,6 +1,7 @@
 
 import React, { useState, useCallback, useEffect } from 'react';
 import { WizardStep, CommandScope, ArgStrategy, Message, CommandConfig, Template } from './types';
+import { NEW_TEMPLATE_TOML } from './constants';
 import ObjectiveStep from './components/ObjectiveStep';
 import ConfigStep from './components/ConfigStep';
 import RefineStep from './components/RefineStep';
@@ -65,7 +66,7 @@ const App: React.FC = () => {
   // State for templates
   const [templates, setTemplates] = useState<Template[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
-  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
   const [isSaveModalOpen, setIsSaveModalOpen] = useState(false);
   
   useEffect(() => {
@@ -90,7 +91,7 @@ const App: React.FC = () => {
     setHistory([]);
     setHistoryIndex(-1);
     setSelectedTemplateId(null);
-    setEditingTemplateId(null);
+    setEditingTemplate(null);
   }
 
   const handleGoHome = () => {
@@ -207,15 +208,33 @@ const App: React.FC = () => {
   };
 
   const handleStartEditTemplate = (id: string) => {
-    setEditingTemplateId(id);
+    const templateToEdit = templates.find(t => t.id === id);
+    if (templateToEdit) {
+      setEditingTemplate(templateToEdit);
+      setCurrentStep(WizardStep.EditTemplate);
+    }
+  };
+
+  const handleStartNewTemplate = () => {
+    const newTemplate: Template = {
+      id: Date.now().toString(),
+      name: '',
+      description: '',
+      toml: NEW_TEMPLATE_TOML,
+    };
+    setEditingTemplate(newTemplate);
     setCurrentStep(WizardStep.EditTemplate);
   };
 
   const handleUpdateTemplate = (updatedTemplate: Template) => {
-    const updatedTemplates = templates.map(t => t.id === updatedTemplate.id ? updatedTemplate : t);
+    const isExisting = templates.some(t => t.id === updatedTemplate.id);
+    const updatedTemplates = isExisting
+      ? templates.map(t => (t.id === updatedTemplate.id ? updatedTemplate : t))
+      : [...templates, updatedTemplate];
+
     setTemplates(updatedTemplates);
     saveTemplates(updatedTemplates);
-    setEditingTemplateId(null);
+    setEditingTemplate(null);
     setCurrentStep(WizardStep.SelectTemplate);
   };
 
@@ -242,6 +261,7 @@ const App: React.FC = () => {
                  onSelectTemplate={handleSelectTemplate}
                  onEditTemplate={handleStartEditTemplate}
                  onDeleteTemplate={handleDeleteTemplate}
+                 onNewTemplate={handleStartNewTemplate}
                  onBack={() => setCurrentStep(WizardStep.Home)}
                />;
       case WizardStep.VariantObjective: {
@@ -253,7 +273,7 @@ const App: React.FC = () => {
         return <VariantObjectiveStep template={selectedTemplate} objective={objective} setObjective={setObjective} onNext={() => setCurrentStep(WizardStep.Config)} onBack={() => setCurrentStep(WizardStep.SelectTemplate)} />
       }
       case WizardStep.EditTemplate: {
-        const templateToEdit = templates.find(t => t.id === editingTemplateId);
+        const templateToEdit = editingTemplate;
         if (!templateToEdit) {
             // Safety check, go back if template not found
             setCurrentStep(WizardStep.SelectTemplate);
@@ -262,7 +282,10 @@ const App: React.FC = () => {
         return <EditTemplateStep
                     template={templateToEdit}
                     onUpdate={handleUpdateTemplate}
-                    onCancel={() => setCurrentStep(WizardStep.SelectTemplate)}
+                    onCancel={() => {
+                        setEditingTemplate(null);
+                        setCurrentStep(WizardStep.SelectTemplate);
+                    }}
                     existingTemplates={templates}
                 />
       }

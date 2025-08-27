@@ -112,3 +112,13 @@ The diff is:
 **Example Output:**
 Generates a conventional commit message based on the staged git changes.
 `;
+
+export const NEW_TEMPLATE_TOML = `# ~/.gemini/commands/new/command.toml
+
+description = "A new command template."
+
+prompt = """
+Your prompt goes here.
+You can use {{args}} for user input.
+"""
+`;
