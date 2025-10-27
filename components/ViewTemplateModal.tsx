@@ -17,11 +17,11 @@ const ViewTemplateModal: React.FC<ViewTemplateModalProps> = ({ isOpen, onClose, 
   }
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(template.toml).then(() => {
+    navigator.clipboard.writeText(template.content).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     }).catch(err => {
-      console.error("Failed to copy TOML content: ", err);
+      console.error("Failed to copy content: ", err);
     });
   };
 
@@ -48,7 +48,7 @@ const ViewTemplateModal: React.FC<ViewTemplateModalProps> = ({ isOpen, onClose, 
 
         <div className="flex-grow bg-[#212934] border border-[#5c6f7e] rounded-lg overflow-hidden flex flex-col min-h-0">
            <div className="flex justify-between items-center p-3 bg-[#212934] border-b border-[#5c6f7e]">
-               <h3 className="font-mono text-sm text-gray-400">TOML Content</h3>
+               <h3 className="font-mono text-sm text-gray-400">Template Content</h3>
                <button
                     onClick={handleCopy}
                     className={`flex items-center gap-2 px-3 py-1 font-semibold rounded-md border transition-all text-sm ${
@@ -70,7 +70,7 @@ const ViewTemplateModal: React.FC<ViewTemplateModalProps> = ({ isOpen, onClose, 
            </div>
            <div className="flex-grow overflow-auto p-4">
                <pre className="whitespace-pre-wrap leading-relaxed text-sm font-mono text-gray-200">
-                {template.toml}
+                {template.content}
                </pre>
            </div>
         </div>

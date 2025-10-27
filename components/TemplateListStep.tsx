@@ -1,11 +1,12 @@
 
 import React, { useState, useMemo } from 'react';
-import { Template } from '../types';
+import { Template, ToolType } from '../types';
 import Icon from './Icon';
 import ViewTemplateModal from './ViewTemplateModal';
 
 interface TemplateListStepProps {
   templates: Template[];
+  tool: ToolType;
   onSelectTemplate: (templateId: string) => void;
   onEditTemplate: (templateId: string) => void;
   onDeleteTemplate: (templateId: string) => void;
@@ -13,7 +14,7 @@ interface TemplateListStepProps {
   onBack: () => void;
 }
 
-const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelectTemplate, onEditTemplate, onDeleteTemplate, onNewTemplate, onBack }) => {
+const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, tool, onSelectTemplate, onEditTemplate, onDeleteTemplate, onNewTemplate, onBack }) => {
   const [selectedTag, setSelectedTag] = useState<string | null>(null);
   const [viewingTemplate, setViewingTemplate] = useState<Template | null>(null);
 
@@ -37,8 +38,8 @@ const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelect
       <div className="flex flex-col gap-6 animate-fade-in">
         <div className="flex justify-between items-start">
           <div>
-            <h2 className="text-2xl font-bold text-[#e2a32d]">Command Templates</h2>
-            <p className="text-[#95aac0] mt-1">Manage your library or select a base command to generate a new variant.</p>
+            <h2 className="text-2xl font-bold text-[#e2a32d]">{tool} Templates</h2>
+            <p className="text-[#95aac0] mt-1">Manage your library or select a base artifact to generate a new variant.</p>
           </div>
           <div className="flex items-center gap-4 flex-shrink-0">
               <button onClick={onBack} className="px-6 py-2 bg-[#333e48] text-gray-200 font-semibold rounded-lg border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all">
@@ -80,7 +81,7 @@ const TemplateListStep: React.FC<TemplateListStepProps> = ({ templates, onSelect
               <div className="text-center py-16 bg-[#212934] rounded-lg border border-dashed border-[#5c6f7e]">
                 <Icon path="M13 13h-2v-2h2v2zm0-4h-2V5h2v4zM18 2H6c-1.1 0-2 .9-2 2v16h16V4c0-1.1-.9-2-2-2zM8 6h10v2H8V6zm10 8H8v-2h10v2zm-2-4H8v-2h8v2z" className="w-16 h-16 text-[#5c6f7e] mx-auto mb-4" />
                 <h3 className="text-xl font-bold text-gray-200">No Templates Found</h3>
-                <p className="text-[#95aac0] mt-2">{selectedTag ? `No templates match the tag "${selectedTag}".` : "Create a new template or save a generated command to get started."}</p>
+                <p className="text-[#95aac0] mt-2">{selectedTag ? `No templates match the tag "${selectedTag}".` : `Create a new template for ${tool} to get started.`}</p>
               </div>
             ) : (
               <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">

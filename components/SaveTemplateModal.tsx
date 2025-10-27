@@ -9,10 +9,10 @@ interface SaveTemplateModalProps {
   onClose: () => void;
   onSave: (name: string, description: string, tags: string[]) => void;
   templates: Template[];
-  tomlContent: string;
+  content: string;
 }
 
-const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, onSave, templates, tomlContent }) => {
+const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, onSave, templates, content }) => {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [tags, setTags] = useState<string[]>([]);
@@ -22,31 +22,28 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
 
   useEffect(() => {
     if (isOpen) {
-      // Reset fields when opening
       setName('');
       setDescription('');
       setTags([]);
       setTagInput('');
       setError(null);
 
-      // Generate description and tags in parallel
       setIsGenerating(true);
       Promise.all([
-        generateTemplateDescription(tomlContent),
-        generateTemplateTags(tomlContent)
+        generateTemplateDescription(content),
+        generateTemplateTags(content)
       ]).then(([generatedDesc, generatedTags]) => {
         setDescription(generatedDesc);
         setTags(generatedTags);
       }).catch(err => {
         console.error("Failed to generate metadata", err);
-        // Provide default values on failure
-        setDescription("A reusable command template for the Gemini CLI.");
+        setDescription("A reusable template.");
         setTags([]);
       }).finally(() => {
         setIsGenerating(false);
       });
     }
-  }, [isOpen, tomlContent]);
+  }, [isOpen, content]);
 
   if (!isOpen) {
     return null;
@@ -75,7 +72,7 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
     const newTags = input
       .split(',')
       .map(t => t.trim().toLowerCase())
-      .filter(t => t && !tags.includes(t)); // Filter out empty and duplicate tags
+      .filter(t => t && !tags.includes(t)); 
 
     if (newTags.length > 0) {
       setTags(currentTags => [...currentTags, ...newTags]);
@@ -90,12 +87,11 @@ const SaveTemplateModal: React.FC<SaveTemplateModalProps> = ({ isOpen, onClose, 
         handleAddTags(tagInput);
       }
     } else if (e.key === 'Backspace' && !tagInput && tags.length > 0) {
-      // Optional: remove last tag on backspace when input is empty
       handleRemoveTag(tags[tags.length - 1]);
     }
   };
   
-  const placeholderText = isGenerating ? "Generating AI metadata..." : "A short description of what this command template does.";
+  const placeholderText = isGenerating ? "Generating AI metadata..." : "A short description of what this template does.";
 
   return (
     <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 animate-fade-in" onClick={onClose}>

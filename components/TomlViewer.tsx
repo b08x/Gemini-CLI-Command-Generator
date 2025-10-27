@@ -1,20 +1,20 @@
+
 import React from 'react';
 import { diffLines } from 'diff';
 import Icon from './Icon';
 import { TomlValidationResult } from '../services/tomlValidationService';
 
-interface TomlViewerProps {
-  newToml: string;
-  oldToml: string | null;
+interface CodeViewerProps {
+  newContent: string;
+  oldContent: string | null;
   validationResult: TomlValidationResult;
 }
 
-const TomlViewer: React.FC<TomlViewerProps> = ({ newToml, oldToml, validationResult }) => {
-  const isErrorState = newToml.trim().startsWith('# ERROR:');
+const CodeViewer: React.FC<CodeViewerProps> = ({ newContent, oldContent, validationResult }) => {
+  const isErrorState = newContent.trim().startsWith('# ERROR:');
   const isInvalidToml = !validationResult.isValid;
 
-  // If oldToml is null (initial generation), compare newToml to itself to show no changes.
-  const changes = diffLines(oldToml ?? newToml, newToml);
+  const changes = diffLines(oldContent ?? newContent, newContent);
 
   const containerClasses = `w-full h-full font-mono text-sm bg-[#212934] border rounded-lg overflow-hidden flex flex-col
     ${isErrorState ? 'border-red-500/50' : isInvalidToml ? 'border-yellow-500/50' : 'border-[#5c6f7e]'}`;
@@ -57,4 +57,4 @@ const TomlViewer: React.FC<TomlViewerProps> = ({ newToml, oldToml, validationRes
   );
 };
 
-export default TomlViewer;
+export default CodeViewer;

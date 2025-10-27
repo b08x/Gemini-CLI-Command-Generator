@@ -1,12 +1,14 @@
 
 import { GoogleGenAI, GenerateContentResponse } from "@google/genai";
-import { CommandConfig, Message } from '../types';
-import { SYSTEM_PROMPT, MCP_SERVERS, VARIANT_SYSTEM_PROMPT, TEMPLATE_DESCRIPTION_SYSTEM_PROMPT, TEMPLATE_TAGS_SYSTEM_PROMPT } from '../constants';
+import { GeminiCommandConfig, Message, ToolType, EntityType, ClaudeCodeConfig, OpenCodeConfig } from '../types';
+import { GEMINI_SYSTEM_PROMPT, CLAUDE_CODE_SYSTEM_PROMPT, OPEN_CODE_SYSTEM_PROMPT, MCP_SERVERS, VARIANT_SYSTEM_PROMPT, TEMPLATE_DESCRIPTION_SYSTEM_PROMPT, TEMPLATE_TAGS_SYSTEM_PROMPT } from '../constants';
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 const model = 'gemini-2.5-flash';
 
-function constructInitialPrompt(config: CommandConfig): string {
+// --- Prompt Constructors ---
+
+function constructGeminiInitialPrompt(config: GeminiCommandConfig): string {
   const scopePath = config.scope === 'Global' ? '~/.gemini/commands/' : '[project]/.gemini/commands/';
   const fullPath = `${scopePath}${config.namespace}/${config.commandName}.toml`;
 
@@ -31,160 +33,149 @@ Based on the SFL framework, generate a TOML file for the following Gemini CLI co
 - **Argument Strategy**: ${config.argStrategy}
 ${mcpIntegrationSection}
 
-**Output Formatting Requirements:**
-Your output must be ONLY the raw TOML code, following this exact structure:
-1.  A TOML comment line with the full file path. (e.g., \`# ${fullPath}\`)
-2.  A blank line.
-3.  The \`description\` key-value pair.
-4.  A blank line.
-5.  The \`prompt\` key-value pair, using multi-line TOML string syntax (\`"""..."""\`).
-
-**Example Structure:**
-\`\`\`toml
-# ${fullPath}
-
-description = "A brief but clear description of what the command does."
-
-prompt = """
-The main prompt content goes here.
-It should be well-structured and detailed, following the command's objective.
-It can include placeholders like {{args}} or shell commands like !{ls -F} if needed.
-"""
-\`\`\`
-
-Generate the complete TOML file content now, adhering strictly to these formatting rules.
+Generate the complete TOML file content now.
 `;
 }
 
-export const generateInitialToml = async (config: CommandConfig): Promise<string> => {
+function constructClaudeCodeInitialPrompt(config: ClaudeCodeConfig): string {
+    const mcpIntegrationSection = config.mcpServers && config.mcpServers.length > 0
+    ? `
+It should be aware of the following MCP servers: ${config.mcpServers.join(', ')}. Integrate their capabilities where relevant.
+` : '';
+
+    return `
+Generate a Markdown file with YAML frontmatter for a Claude-Code ${config.entityType}.
+
+**Specifications:**
+- **Objective**: ${config.objective}
+- **Entity Type**: ${config.entityType}
+- **Name**: ${config.name}
+- **Description**: ${config.description}
+- **Tools**: ${config.tools}
+${mcpIntegrationSection}
+
+Generate the complete file content now.
+`;
+}
+
+function constructOpenCodeInitialPrompt(config: OpenCodeConfig): string {
+     const mcpIntegrationSection = config.mcpServers && config.mcpServers.length > 0
+    ? `
+It should be aware of the following MCP servers: ${config.mcpServers.join(', ')}. Integrate their capabilities where relevant.
+` : '';
+
+    return `
+Generate a Markdown file with YAML frontmatter for an OpenCode Agent.
+
+**Specifications:**
+- **Objective**: ${config.objective}
+- **Description**: ${config.description}
+- **Mode**: ${config.mode}
+- **Model**: ${config.model}
+- **Tools**: ${config.tools}
+- **Permissions**: ${config.permissions}
+- **Temperature**: ${config.temperature}
+${mcpIntegrationSection}
+
+Generate the complete file content now.
+`;
+}
+
+// --- Main Service Functions ---
+
+type ConfigType = GeminiCommandConfig | ClaudeCodeConfig | OpenCodeConfig;
+
+export const generateInitialArtifact = async (tool: ToolType, config: ConfigType): Promise<string> => {
+  let prompt: string;
+  let systemInstruction: string;
+
+  switch (tool) {
+    case ToolType.ClaudeCode:
+      prompt = constructClaudeCodeInitialPrompt(config as ClaudeCodeConfig);
+      systemInstruction = CLAUDE_CODE_SYSTEM_PROMPT;
+      break;
+    case ToolType.OpenCode:
+      prompt = constructOpenCodeInitialPrompt(config as OpenCodeConfig);
+      systemInstruction = OPEN_CODE_SYSTEM_PROMPT;
+      break;
+    case ToolType.GeminiCLI:
+    default:
+      prompt = constructGeminiInitialPrompt(config as GeminiCommandConfig);
+      systemInstruction = GEMINI_SYSTEM_PROMPT;
+      break;
+  }
+
   try {
-    const prompt = constructInitialPrompt(config);
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: model,
       contents: prompt,
-      config: {
-        systemInstruction: SYSTEM_PROMPT,
-      },
+      config: { systemInstruction },
     });
     return response.text.trim();
   } catch (error) {
-    console.error("Error generating initial TOML:", error);
-    let detailedError = "An unknown error occurred. Please check the browser console for details.";
-    if (error instanceof Error) {
-        if (error.message.includes('API key')) {
-            detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
-        } else if (error.message.toLowerCase().includes('fetch')) {
-             detailedError = "A network error occurred. Please check your internet connection and try again.";
-        } else {
-            detailedError = error.message;
-        }
-    } else {
-        detailedError = String(error);
-    }
-    return `# ERROR: Failed to generate the command TOML.\n#\n# Reason: ${detailedError}`;
+    console.error(`Error generating initial ${tool} artifact:`, error);
+    const detailedError = getDetailedError(error);
+    return `# ERROR: Failed to generate the ${tool} artifact.\n#\n# Reason: ${detailedError}`;
   }
 };
 
-function constructRefinementPrompt(currentToml: string, messages: Message[]): string {
-    const history = messages.map(msg => `${msg.role === 'user' ? 'User Request' : 'Your Previous Response (TOML)'}:\n${msg.content}`).join('\n\n---\n\n');
 
-    return `
-You are in a refinement loop for a Gemini CLI command. You will be given the current TOML file and a user request to modify it.
+export const refineArtifact = async (currentArtifact: string, messages: Message[], tool: ToolType): Promise<string> => {
+    if (messages.length === 0) return currentArtifact;
 
-**Current TOML File:**
-\`\`\`toml
-${currentToml}
+    const systemInstruction = tool === ToolType.GeminiCLI ? GEMINI_SYSTEM_PROMPT : tool === ToolType.ClaudeCode ? CLAUDE_CODE_SYSTEM_PROMPT : OPEN_CODE_SYSTEM_PROMPT;
+
+    const prompt = `
+You are in a refinement loop for a ${tool} configuration file. You will be given the current file content and a user request to modify it.
+
+**Current File Content:**
+\`\`\`${tool === ToolType.GeminiCLI ? 'toml' : 'markdown'}
+${currentArtifact}
 \`\`\`
 
 **User's Refinement Request:**
 ${messages[messages.length - 1].content}
 
-**Chat History for Context:**
-${history}
-
 **Your Task:**
-Based on the user's latest request and the provided context, generate the new, complete TOML file.
-
-**Output Formatting Requirements:**
-- Your output MUST ONLY be the raw, updated TOML code.
-- DO NOT include any conversational text, explanations, or markdown formatting like \`\`\`toml.
-- Ensure the output is a single, valid TOML file.
+Based on the user's latest request, generate the new, complete file. Your output MUST ONLY be the raw, updated file content.
 `;
-}
-
-export const refineToml = async (currentToml: string, messages: Message[]): Promise<string> => {
-    if (messages.length === 0) return currentToml;
-
     try {
-        const prompt = constructRefinementPrompt(currentToml, messages);
         const response: GenerateContentResponse = await ai.models.generateContent({
             model: model,
             contents: prompt,
-            config: {
-                systemInstruction: SYSTEM_PROMPT,
-            },
+            config: { systemInstruction },
         });
         return response.text.trim();
     } catch (error) {
-        console.error("Error refining TOML:", error);
-        let detailedError = "An unknown error occurred. Please check the browser console for details.";
-        if (error instanceof Error) {
-            if (error.message.includes('API key')) {
-                detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
-            } else if (error.message.toLowerCase().includes('fetch')) {
-                detailedError = "A network error occurred. Please check your internet connection and try again.";
-            } else {
-                detailedError = error.message;
-            }
-        } else {
-            detailedError = String(error);
-        }
-
-        const errorHeader = `# ERROR: The AI failed to refine the command.\n#\n# Reason: ${detailedError}\n#\n# Your previous version has been preserved below.`;
-        
-        return `${errorHeader}\n\n${currentToml}`;
+        console.error(`Error refining ${tool} artifact:`, error);
+        const detailedError = getDetailedError(error);
+        const errorHeader = `# ERROR: The AI failed to refine the artifact.\n#\n# Reason: ${detailedError}\n#\n# Your previous version has been preserved below.`;
+        return `${errorHeader}\n\n${currentArtifact}`;
     }
 };
 
-function constructVariantPrompt(baseToml: string, objective: string, config: CommandConfig): string {
-  const scopePath = config.scope === 'Global' ? '~/.gemini/commands/' : '[project]/.gemini/commands/';
-  const fullPath = `${scopePath}${config.namespace}/${config.commandName}.toml`;
+export const generateVariantFromTemplate = async (baseContent: string, objective: string, tool: ToolType, config: ConfigType): Promise<string> => {
+  const prompt = `
+Please generate a new variant of the following ${tool} configuration file based on the new objective and specifications.
 
-  const mcpIntegrationSection = config.mcpServers && config.mcpServers.length > 0
-    ? `
-- **MCP Integration**: The user has indicated the command should be aware of the following MCP servers: ${config.mcpServers.join(', ')}. Integrate them into the prompt's capabilities and instructions where relevant.`
-    : '';
-
-  return `
-Please generate a new variant of the following Gemini CLI command based on the new objective and specifications.
-
-**Base TOML File (Your Starting Point):**
-\`\`\`toml
-${baseToml}
+**Base File (Your Starting Point):**
+\`\`\`${tool === ToolType.GeminiCLI ? 'toml' : 'markdown'}
+${baseContent}
 \`\`\`
 
 **New Objective for the Variant:**
 "${objective}"
 
-**New Command Specifications:**
-- **New Scope**: ${config.scope}
-- **New File Path**: \`${fullPath}\`
-- **New Argument Strategy**: ${config.argStrategy}
-${mcpIntegrationSection}
+**New Specifications:**
+${JSON.stringify(config, null, 2)}
 
 **Your Task:**
-Modify the base TOML to create a new command that accomplishes the new objective and conforms to the new specifications.
-- Update the file path comment at the top of the file to \`# ${fullPath}\`.
-- Update the 'description' to match the new objective.
-- Update the 'prompt' to implement the new objective and respect the new argument strategy.
+Modify the base file to create a new artifact that accomplishes the new objective and conforms to the new specifications. Update all relevant metadata (e.g., descriptions, paths, names) and the core prompt logic.
 
-Return only the raw, complete, and valid TOML for the new variant.
+Return only the raw, complete, and valid file content for the new variant.
 `;
-}
 
-export const generateVariantFromTemplate = async (baseToml: string, objective: string, config: CommandConfig): Promise<string> => {
   try {
-    const prompt = constructVariantPrompt(baseToml, objective, config);
     const response: GenerateContentResponse = await ai.models.generateContent({
       model: model,
       contents: prompt,
@@ -194,30 +185,18 @@ export const generateVariantFromTemplate = async (baseToml: string, objective: s
     });
     return response.text.trim();
   } catch (error) {
-    console.error("Error generating variant TOML:", error);
-    let detailedError = "An unknown error occurred. Please check the browser console for details.";
-    if (error instanceof Error) {
-        if (error.message.includes('API key')) {
-            detailedError = "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
-        } else if (error.message.toLowerCase().includes('fetch')) {
-             detailedError = "A network error occurred. Please check your internet connection and try again.";
-        } else {
-            detailedError = error.message;
-        }
-    } else {
-        detailedError = String(error);
-    }
+    console.error(`Error generating ${tool} variant:`, error);
+    const detailedError = getDetailedError(error);
     return `# ERROR: Failed to generate the command variant.\n#\n# Reason: ${detailedError}`;
   }
 };
 
-export const generateTemplateDescription = async (toml: string): Promise<string> => {
+export const generateTemplateDescription = async (content: string): Promise<string> => {
     try {
         const prompt = `
-        Here is the TOML file for the command. Please generate the description.
-
-        \`\`\`toml
-        ${toml}
+        Here is the configuration file. Please generate the description.
+        \`\`\`
+        ${content}
         \`\`\`
         `;
         const response: GenerateContentResponse = await ai.models.generateContent({
@@ -230,17 +209,16 @@ export const generateTemplateDescription = async (toml: string): Promise<string>
         return response.text.trim();
     } catch (error) {
         console.error("Error generating template description:", error);
-        // Return a sensible default on error
-        return "A reusable command template for the Gemini CLI.";
+        return "A reusable command template.";
     }
 };
 
-export const generateTemplateTags = async (toml: string): Promise<string[]> => {
+export const generateTemplateTags = async (content: string): Promise<string[]> => {
     try {
         const prompt = `
-        Here is the TOML file for the command. Please generate the tags.
-        \`\`\`toml
-        ${toml}
+        Here is the configuration file. Please generate the tags.
+        \`\`\`
+        ${content}
         \`\`\`
         `;
         const response: GenerateContentResponse = await ai.models.generateContent({
@@ -253,8 +231,6 @@ export const generateTemplateTags = async (toml: string): Promise<string[]> => {
         });
         
         const responseText = response.text.trim();
-        // The response should be a JSON array string, e.g., '["git", "commit"]'
-        // Add robust parsing to handle potential API deviations.
         const cleanedText = responseText.replace(/^```json\s*|```\s*$/g, '').trim();
         const tags = JSON.parse(cleanedText);
         
@@ -264,7 +240,21 @@ export const generateTemplateTags = async (toml: string): Promise<string[]> => {
         return [];
     } catch (error) {
         console.error("Error generating or parsing template tags:", error);
-        // Return an empty array on any error (API call, JSON parsing, etc.)
         return [];
     }
 };
+
+// --- Utility Functions ---
+
+function getDetailedError(error: any): string {
+    if (error instanceof Error) {
+        if (error.message.includes('API key')) {
+            return "Invalid or missing API Key. Please ensure your API_KEY environment variable is set correctly.";
+        } else if (error.message.toLowerCase().includes('fetch')) {
+             return "A network error occurred. Please check your internet connection and try again.";
+        } else {
+            return error.message;
+        }
+    }
+    return String(error);
+}

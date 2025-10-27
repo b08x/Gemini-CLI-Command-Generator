@@ -1,13 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Message } from '../types';
-import TomlViewer from './TomlViewer';
+import { Message, ToolType, EntityType } from '../types';
+import CodeViewer from './TomlViewer';
 import ChatMessage from './ChatMessage';
 import Icon from './Icon';
 import { validateToml, TomlValidationResult } from '../services/tomlValidationService';
 
 interface RefineStepProps {
-  tomlContent: string;
-  previousTomlContent: string | null;
+  content: string;
+  previousContent: string | null;
   messages: Message[];
   onSendMessage: (message: string) => void;
   isLoading: boolean;
@@ -17,9 +17,9 @@ interface RefineStepProps {
   canUndo: boolean;
   onRedo: () => void;
   canRedo: boolean;
-  commandName: string;
-  namespace: string;
+  filename: string;
   onSaveAsTemplate: () => void;
+  tool: ToolType;
 }
 
 const LoadingSpinner: React.FC = () => (
@@ -29,7 +29,7 @@ const LoadingSpinner: React.FC = () => (
 );
 
 const RefineStep: React.FC<RefineStepProps> = ({
-  tomlContent, previousTomlContent, messages, onSendMessage, isLoading, onBack, onGoHome, onUndo, canUndo, onRedo, canRedo, commandName, namespace, onSaveAsTemplate
+  content, previousContent, messages, onSendMessage, isLoading, onBack, onGoHome, onUndo, canUndo, onRedo, canRedo, filename, onSaveAsTemplate, tool
 }) => {
   const [userInput, setUserInput] = useState('');
   const [isCopied, setIsCopied] = useState(false);
@@ -37,10 +37,12 @@ const RefineStep: React.FC<RefineStepProps> = ({
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (tomlContent) {
-      setValidationResult(validateToml(tomlContent));
+    if (content && tool === ToolType.GeminiCLI) {
+      setValidationResult(validateToml(content));
+    } else {
+      setValidationResult({ isValid: true, message: null }); // No validation for other types yet
     }
-  }, [tomlContent]);
+  }, [content, tool]);
 
   const handleSend = () => {
     if (userInput.trim()) {
@@ -50,22 +52,23 @@ const RefineStep: React.FC<RefineStepProps> = ({
   };
 
   const handleCopy = () => {
-    if (!tomlContent) return;
-    navigator.clipboard.writeText(tomlContent).then(() => {
+    if (!content) return;
+    navigator.clipboard.writeText(content).then(() => {
       setIsCopied(true);
       setTimeout(() => setIsCopied(false), 2000);
     }).catch(err => {
-      console.error("Failed to copy TOML content: ", err);
+      console.error("Failed to copy content: ", err);
       alert("Failed to copy to clipboard.");
     });
   };
 
   const handleDownload = () => {
-    const blob = new Blob([tomlContent], { type: 'text/toml' });
+    const mimeType = tool === ToolType.GeminiCLI ? 'text/toml' : 'text/markdown';
+    const blob = new Blob([content], { type: mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `${namespace}-${commandName}.toml`;
+    a.download = filename;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -87,7 +90,7 @@ const RefineStep: React.FC<RefineStepProps> = ({
                Home
              </button>
            </div>
-           <h3 className="font-mono text-sm text-green-400">{`${namespace}/${commandName}.toml`}</h3>
+           <h3 className="font-mono text-sm text-green-400">{filename}</h3>
             <div className="flex items-center gap-2">
               <button onClick={onSaveAsTemplate} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
                 <Icon path="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z" className="w-5 h-5"/>
@@ -95,7 +98,7 @@ const RefineStep: React.FC<RefineStepProps> = ({
               </button>
               <button
                 onClick={handleCopy}
-                disabled={isLoading || !tomlContent}
+                disabled={isLoading || !content}
                 className={`flex items-center gap-2 px-3 py-1 font-semibold rounded-md border transition-all text-sm ${
                   isCopied
                     ? 'bg-green-600 text-white border-green-500'
@@ -119,7 +122,7 @@ const RefineStep: React.FC<RefineStepProps> = ({
            </div>
         </div>
         <div className="flex-grow p-2 min-h-0">
-            <TomlViewer newToml={tomlContent} oldToml={previousTomlContent} validationResult={validationResult} />
+            <CodeViewer newContent={content} oldContent={previousContent} validationResult={validationResult} />
         </div>
         <div className="flex justify-between items-center p-3 bg-[#212934] border-t border-[#5c6f7e]">
              <button onClick={onBack} className="flex items-center gap-2 px-3 py-1 bg-[#333e48] text-gray-200 font-semibold rounded-md border border-[#5c6f7e] hover:bg-[#5c6f7e] transition-all text-sm">
@@ -145,7 +148,7 @@ const RefineStep: React.FC<RefineStepProps> = ({
             <h3 className="font-semibold text-[#e2a32d]">Refine with AI</h3>
         </div>
         <div className="flex-grow overflow-y-auto p-4">
-          <ChatMessage message={{role: 'model', content: "Here is the initial version of your command. How would you like to refine it?\n\nFor example: 'Add a shell command to show the current git branch.' or 'Make the prompt more formal.'"}} />
+          <ChatMessage message={{role: 'model', content: "Here is the initial version of your configuration. How would you like to refine it?\n\nFor example: 'Add a shell command to show the current git branch.' or 'Make the prompt more formal.'"}} />
           {messages.map((msg, index) => (
             <ChatMessage key={index} message={msg} />
           ))}

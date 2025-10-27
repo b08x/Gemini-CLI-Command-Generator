@@ -14,14 +14,14 @@ interface EditTemplateStepProps {
 const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate, onCancel, existingTemplates }) => {
   const [name, setName] = useState(template.name);
   const [description, setDescription] = useState(template.description);
-  const [toml, setToml] = useState(template.toml);
+  const [content, setContent] = useState(template.content);
   const [tags, setTags] = useState(template.tags || []);
   const [nameError, setNameError] = useState<string | null>(null);
 
   useEffect(() => {
     setName(template.name);
     setDescription(template.description);
-    setToml(template.toml);
+    setContent(template.content);
     setTags(template.tags || []);
   }, [template]);
 
@@ -43,24 +43,24 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
   }
   
   const handleSave = () => {
-    if (name.trim() && description.trim() && toml.trim() && !nameError) {
+    if (name.trim() && description.trim() && content.trim() && !nameError) {
       onUpdate({
         ...template,
         name: name.trim(),
         description: description.trim(),
-        toml: toml.trim(),
+        content: content.trim(),
         tags,
       });
     }
   };
 
-  const isSaveDisabled = !name.trim() || !description.trim() || !toml.trim() || !!nameError;
+  const isSaveDisabled = !name.trim() || !description.trim() || !content.trim() || !!nameError;
 
   return (
     <div className="flex flex-col gap-6 animate-fade-in">
       <div>
         <h2 className="text-2xl font-bold text-[#e2a32d]">Edit Template</h2>
-        <p className="text-[#95aac0] mt-1">Modify the details of your saved command template.</p>
+        <p className="text-[#95aac0] mt-1">Modify the details of your saved {template.tool} template.</p>
       </div>
       
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -101,8 +101,8 @@ const EditTemplateStep: React.FC<EditTemplateStepProps> = ({ template, onUpdate,
         </div>
       
       <div className="flex flex-col">
-          <label htmlFor="template-toml" className="block text-sm font-medium text-gray-300 mb-2">TOML Content</label>
-          <CodeEditor value={toml} onChange={setToml} />
+          <label htmlFor="template-toml" className="block text-sm font-medium text-gray-300 mb-2">Template Content</label>
+          <CodeEditor value={content} onChange={setContent} />
       </div>
 
       <div className="flex justify-between items-center mt-4">

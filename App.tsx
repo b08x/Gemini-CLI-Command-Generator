@@ -1,62 +1,44 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
-import { WizardStep, CommandScope, ArgStrategy, Message, CommandConfig, Template } from './types';
-import { NEW_TEMPLATE_TOML } from './constants';
+import { WizardStep, CommandScope, ArgStrategy, Message, Template, ToolType, EntityType, GeminiCommandConfig, ClaudeCodeConfig, OpenCodeConfig } from './types';
+import { getNewTemplateContent } from './constants';
 import ObjectiveStep from './components/ObjectiveStep';
 import ConfigStep from './components/ConfigStep';
 import RefineStep from './components/RefineStep';
-import HomeStep from './components/HomeStep';
+import ToolSelectStep from './components/HomeStep';
+import StartStep from './components/StartStep';
 import TemplateListStep from './components/TemplateListStep';
 import VariantObjectiveStep from './components/VariantObjectiveStep';
 import SaveTemplateModal from './components/SaveTemplateModal';
 import EditTemplateStep from './components/EditTemplateStep';
 import Icon from './components/Icon';
-import { generateInitialToml, refineToml, generateVariantFromTemplate } from './services/geminiService';
+import { generateInitialArtifact, refineArtifact, generateVariantFromTemplate } from './services/geminiService';
 import { getTemplates, saveTemplates } from './services/templateService';
+import YAML from 'js-yaml';
+
 
 interface HistoryEntry {
-  toml: string;
+  content: string;
   messages: Message[];
 }
 
-const parseConfigFromToml = (toml: string): Partial<CommandConfig> => {
-    const config: Partial<CommandConfig> = {};
-
-    // Regex to capture: optional path prefix, namespace, and command name from the TOML comment
-    const pathCommentRegex = /#\s*(?:(~|\[project\])\/.+\/)?([^/]+)\/([^/.\s]+)\.toml/;
-    const pathMatch = toml.match(pathCommentRegex);
-
-    if (pathMatch) {
-        const scopeIdentifier = pathMatch[1]; // '~' or '[project]' or undefined
-        config.scope = scopeIdentifier === '~' ? CommandScope.Global : CommandScope.Project; // Default to Project if no identifier
-        config.namespace = pathMatch[2];
-        config.commandName = pathMatch[3];
-    }
-
-    // Parse ArgStrategy from prompt
-    const promptMatch = toml.match(/prompt\s*=\s*"""([\s\S]*?)"""/);
-    if (promptMatch && promptMatch[1]) {
-        const promptContent = promptMatch[1];
-        if (promptContent.includes('{{args}}')) {
-            config.argStrategy = ArgStrategy.Injection;
-        } else {
-            config.argStrategy = ArgStrategy.Default;
-        }
-    }
-
-    return config;
-};
-
 const App: React.FC = () => {
   const [currentStep, setCurrentStep] = useState<WizardStep>(WizardStep.Home);
+  const [tool, setTool] = useState<ToolType | null>(null);
+  const [entityType, setEntityType] = useState<EntityType | null>(null);
 
   // State for wizard inputs
   const [objective, setObjective] = useState<string>('');
-  const [scope, setScope] = useState<CommandScope>(CommandScope.Global);
-  const [namespace, setNamespace] = useState<string>('');
-  const [commandName, setCommandName] = useState<string>('');
-  const [argStrategy, setArgStrategy] = useState<ArgStrategy>(ArgStrategy.Injection);
-  const [mcpServers, setMcpServers] = useState<string[]>([]);
+  
+  // State for configs
+  const [geminiConfig, setGeminiConfig] = useState<GeminiCommandConfig>({
+    objective: '', scope: CommandScope.Global, namespace: '', commandName: '', argStrategy: ArgStrategy.Injection, mcpServers: []
+  });
+  const [claudeConfig, setClaudeConfig] = useState<ClaudeCodeConfig>({
+    objective: '', name: '', description: '', tools: 'Read, Write, Edit, Grep, Glob, Bash', entityType: EntityType.Agent, mcpServers: []
+  });
+  const [openCodeConfig, setOpenCodeConfig] = useState<OpenCodeConfig>({
+    objective: '', description: '', mode: 'subagent', model: 'gemini-2.5-pro', tools: '{}', permissions: '{}', temperature: 0.5, entityType: EntityType.Agent, mcpServers: []
+  });
   
   // State for generated content and chat history
   const [history, setHistory] = useState<HistoryEntry[]>([]);
@@ -73,21 +55,20 @@ const App: React.FC = () => {
     setTemplates(getTemplates());
   }, []);
 
-  // Derived state from history
   const currentHistoryEntry = history[historyIndex];
-  const tomlContent = currentHistoryEntry?.toml || '';
+  const content = currentHistoryEntry?.content || '';
   const messages = currentHistoryEntry?.messages || [];
-  const previousTomlContent = historyIndex > 0 ? history[historyIndex - 1].toml : null;
+  const previousContent = historyIndex > 0 ? history[historyIndex - 1].content : null;
   const canUndo = historyIndex > 0;
   const canRedo = historyIndex < history.length - 1;
 
   const resetWizardState = () => {
+    setTool(null);
+    setEntityType(null);
     setObjective('');
-    setScope(CommandScope.Global);
-    setNamespace('');
-    setCommandName('');
-    setArgStrategy(ArgStrategy.Injection);
-    setMcpServers([]);
+    setGeminiConfig({ objective: '', scope: CommandScope.Global, namespace: '', commandName: '', argStrategy: ArgStrategy.Injection, mcpServers: [] });
+    setClaudeConfig({ objective: '', name: '', description: '', tools: 'Read, Write, Edit, Grep, Glob, Bash', entityType: EntityType.Agent, mcpServers: [] });
+    setOpenCodeConfig({ objective: '', description: '', mode: 'subagent', model: 'gemini-2.5-pro', tools: '{}', permissions: '{}', temperature: 0.5, entityType: EntityType.Agent, mcpServers: [] });
     setHistory([]);
     setHistoryIndex(-1);
     setSelectedTemplateId(null);
@@ -95,9 +76,6 @@ const App: React.FC = () => {
   }
 
   const handleGoHome = () => {
-    // The window.confirm dialog can be unreliable in certain sandboxed environments,
-    // causing the button to appear to do nothing. Removing it ensures functionality.
-    // A custom modal could be added back later if a confirmation is desired.
     resetWizardState();
     setCurrentStep(WizardStep.Home);
   };
@@ -105,94 +83,76 @@ const App: React.FC = () => {
   const handleSelectTemplate = (id: string) => {
     const template = templates.find(t => t.id === id);
     if (!template) return;
-
-    const parsedConfig = parseConfigFromToml(template.toml);
-
-    // Pre-fill state for the ConfigStep
-    setScope(parsedConfig.scope || CommandScope.Global);
-    setNamespace(parsedConfig.namespace || '');
-    setCommandName(parsedConfig.commandName || '');
-    setArgStrategy(parsedConfig.argStrategy || ArgStrategy.Injection);
-    setMcpServers([]); // Templates don't store MCP servers
-
     setSelectedTemplateId(id);
-    setObjective(''); // Clear objective for the new variant
+    setObjective('');
     setCurrentStep(WizardStep.VariantObjective);
   };
 
-  const handleGenerateInitial = useCallback(async () => {
-    setIsLoading(true);
-    setCurrentStep(WizardStep.Refine);
-    const config: CommandConfig = { objective, scope, namespace, commandName, argStrategy, mcpServers };
-    const generatedToml = await generateInitialToml(config);
-    setHistory([{ toml: generatedToml, messages: [] }]);
-    setHistoryIndex(0);
-    setIsLoading(false);
-  }, [objective, scope, namespace, commandName, argStrategy, mcpServers]);
+  const getCurrentConfig = () => {
+      switch(tool) {
+          case ToolType.ClaudeCode: return { ...claudeConfig, objective, entityType };
+          case ToolType.OpenCode: return { ...openCodeConfig, objective, entityType };
+          case ToolType.GeminiCLI:
+          default:
+              return { ...geminiConfig, objective };
+      }
+  }
 
-  const handleGenerateVariant = useCallback(async () => {
-    const template = templates.find(t => t.id === selectedTemplateId);
-    if (!template || !objective) return;
-
+  const handleGenerate = async () => {
+    if (!tool) return;
     setIsLoading(true);
     setCurrentStep(WizardStep.Refine);
     
-    const config: CommandConfig = { objective, scope, namespace, commandName, argStrategy, mcpServers };
+    const config = getCurrentConfig();
+    let generatedContent;
 
-    const generatedToml = await generateVariantFromTemplate(template.toml, objective, config);
-    setHistory([{ toml: generatedToml, messages: [] }]);
-    setHistoryIndex(0);
-    setIsLoading(false);
-  }, [objective, templates, selectedTemplateId, scope, namespace, commandName, argStrategy, mcpServers]);
-
-  const handleGenerate = () => {
     if (selectedTemplateId) {
-        handleGenerateVariant();
+        const template = templates.find(t => t.id === selectedTemplateId);
+        if(template) {
+            generatedContent = await generateVariantFromTemplate(template.content, objective, tool, config);
+        } else {
+            // Failsafe
+            generatedContent = await generateInitialArtifact(tool, config);
+        }
     } else {
-        handleGenerateInitial();
+        generatedContent = await generateInitialArtifact(tool, config);
     }
+    
+    setHistory([{ content: generatedContent, messages: [] }]);
+    setHistoryIndex(0);
+    setIsLoading(false);
   };
-
+  
   const handleSendMessage = useCallback(async (userInput: string) => {
-    if (!currentHistoryEntry) return;
+    if (!currentHistoryEntry || !tool) return;
     
     setIsLoading(true);
-
     const userMessage: Message = { role: 'user', content: userInput };
     const apiMessages = [...currentHistoryEntry.messages, userMessage];
     
-    const refinedToml = await refineToml(currentHistoryEntry.toml, apiMessages);
+    const refinedContent = await refineArtifact(currentHistoryEntry.content, apiMessages, tool);
 
-    const modelMessage: Message = { role: 'model', content: "I have updated the TOML based on your request. Any other changes?" };
-    const newFullMessages = [...apiMessages, modelMessage];
+    const modelMessage: Message = { role: 'model', content: "I have updated the artifact based on your request. Any other changes?" };
     
     const newEntry: HistoryEntry = {
-      toml: refinedToml,
-      messages: newFullMessages,
+      content: refinedContent,
+      messages: [...apiMessages, modelMessage],
     };
     
     const newHistory = [...history.slice(0, historyIndex + 1), newEntry];
     setHistory(newHistory);
     setHistoryIndex(newHistory.length - 1);
-    
     setIsLoading(false);
-  }, [history, historyIndex, currentHistoryEntry]);
+  }, [history, historyIndex, currentHistoryEntry, tool]);
   
-  const handleUndo = () => {
-    if (canUndo) setHistoryIndex(historyIndex - 1);
-  };
-
-  const handleRedo = () => {
-    if (canRedo) setHistoryIndex(historyIndex + 1);
-  };
+  const handleUndo = () => { if (canUndo) setHistoryIndex(historyIndex - 1); };
+  const handleRedo = () => { if (canRedo) setHistoryIndex(historyIndex + 1); };
 
   const handleSaveTemplate = (name: string, description: string, tags: string[]) => {
+    if (!tool) return;
     const newTemplate: Template = {
       id: Date.now().toString(),
-      name,
-      description,
-      toml: tomlContent,
-      tags,
+      name, description, content, tags, tool, entityType: entityType || undefined,
     };
     const updatedTemplates = [...templates, newTemplate];
     setTemplates(updatedTemplates);
@@ -217,12 +177,15 @@ const App: React.FC = () => {
   };
 
   const handleStartNewTemplate = () => {
+    if (!tool) return;
     const newTemplate: Template = {
       id: Date.now().toString(),
       name: '',
       description: '',
-      toml: NEW_TEMPLATE_TOML,
+      content: getNewTemplateContent(tool, entityType || EntityType.Command),
       tags: [],
+      tool: tool,
+      entityType: entityType || undefined
     };
     setEditingTemplate(newTemplate);
     setCurrentStep(WizardStep.EditTemplate);
@@ -240,82 +203,109 @@ const App: React.FC = () => {
     setCurrentStep(WizardStep.SelectTemplate);
   };
 
+  const getFilename = (): string => {
+    if (!tool) return "file.txt";
+    switch (tool) {
+        case ToolType.ClaudeCode:
+            return `${claudeConfig.name || 'new-entity'}.md`;
+        case ToolType.OpenCode: {
+            // Extract description from frontmatter for a better name
+             try {
+                const frontmatter = YAML.load(content.split('---')[1]) as { description?: string };
+                const safeName = frontmatter?.description?.toLowerCase().replace(/[^a-z0-9]/g, '-').substring(0, 30) || 'new-agent';
+                return `${safeName}.md`;
+            } catch(e) {
+                return 'new-agent.md';
+            }
+        }
+        case ToolType.GeminiCLI:
+        default:
+            return `${geminiConfig.namespace}-${geminiConfig.commandName}.toml`;
+    }
+  }
+
   const renderStep = () => {
+    if (!tool) {
+      return <ToolSelectStep onSelectTool={(selectedTool) => { setTool(selectedTool); setCurrentStep(WizardStep.Start); }} />;
+    }
+
     switch (currentStep) {
-      case WizardStep.Home:
-        return <HomeStep 
+      case WizardStep.Start:
+        return <StartStep 
+                  tool={tool}
+                  onSetEntityType={setEntityType}
                   onStartFromScratch={() => setCurrentStep(WizardStep.Objective)} 
                   onStartFromTemplate={() => setCurrentStep(WizardStep.SelectTemplate)}
                   onViewTemplates={() => setCurrentStep(WizardStep.SelectTemplate)}
+                  onBack={handleGoHome}
                 />;
       case WizardStep.Objective:
-        return <ObjectiveStep objective={objective} setObjective={setObjective} onNext={() => setCurrentStep(WizardStep.Config)} onBack={() => setCurrentStep(WizardStep.Home)} />;
+        return <ObjectiveStep 
+                  objective={objective} 
+                  setObjective={setObjective} 
+                  onNext={() => setCurrentStep(WizardStep.Config)} 
+                  onBack={() => setCurrentStep(WizardStep.Start)}
+                  tool={tool}
+                  entityType={entityType || undefined}
+                />;
       case WizardStep.Config:
-        const fromTemplateFlow = !!selectedTemplateId;
         return <ConfigStep 
-                  scope={scope} setScope={setScope}
-                  namespace={namespace} setNamespace={setNamespace}
-                  commandName={commandName} setCommandName={setCommandName}
-                  argStrategy={argStrategy} setArgStrategy={setArgStrategy}
-                  mcpServers={mcpServers} setMcpServers={setMcpServers}
-                  onBack={() => setCurrentStep(fromTemplateFlow ? WizardStep.VariantObjective : WizardStep.Objective)}
+                  tool={tool} entityType={entityType}
+                  geminiConfig={geminiConfig} setGeminiConfig={setGeminiConfig}
+                  claudeConfig={claudeConfig} setClaudeConfig={setClaudeConfig}
+                  openCodeConfig={openCodeConfig} setOpenCodeConfig={setOpenCodeConfig}
+                  onBack={() => selectedTemplateId ? setCurrentStep(WizardStep.VariantObjective) : setCurrentStep(WizardStep.Objective)}
                   onGenerate={handleGenerate}
                 />;
       case WizardStep.SelectTemplate:
         return <TemplateListStep
-                 templates={templates}
+                 templates={templates.filter(t => t.tool === tool)}
+                 tool={tool}
                  onSelectTemplate={handleSelectTemplate}
                  onEditTemplate={handleStartEditTemplate}
                  onDeleteTemplate={handleDeleteTemplate}
                  onNewTemplate={handleStartNewTemplate}
-                 onBack={() => setCurrentStep(WizardStep.Home)}
+                 onBack={() => setCurrentStep(WizardStep.Start)}
                />;
       case WizardStep.VariantObjective: {
         const selectedTemplate = templates.find(t => t.id === selectedTemplateId);
         if (!selectedTemplate) {
-          setCurrentStep(WizardStep.SelectTemplate); // safety check
+          setCurrentStep(WizardStep.SelectTemplate);
           return null;
         }
         return <VariantObjectiveStep template={selectedTemplate} objective={objective} setObjective={setObjective} onNext={() => setCurrentStep(WizardStep.Config)} onBack={() => setCurrentStep(WizardStep.SelectTemplate)} />
       }
       case WizardStep.EditTemplate: {
-        const templateToEdit = editingTemplate;
-        if (!templateToEdit) {
-            // Safety check, go back if template not found
+        if (!editingTemplate) {
             setCurrentStep(WizardStep.SelectTemplate);
             return null;
         }
         return <EditTemplateStep
-                    template={templateToEdit}
+                    template={editingTemplate}
                     onUpdate={handleUpdateTemplate}
-                    onCancel={() => {
-                        setEditingTemplate(null);
-                        setCurrentStep(WizardStep.SelectTemplate);
-                    }}
+                    onCancel={() => { setEditingTemplate(null); setCurrentStep(WizardStep.SelectTemplate); }}
                     existingTemplates={templates}
                 />
       }
       case WizardStep.Refine:
-        if (isLoading && historyIndex < 0) return null; // Prevents flashing old content on first load
+        if (isLoading && historyIndex < 0) return null;
 
         return <RefineStep 
-                 tomlContent={tomlContent}
-                 previousTomlContent={previousTomlContent}
+                 content={content}
+                 previousContent={previousContent}
                  messages={messages}
                  onSendMessage={handleSendMessage}
                  isLoading={isLoading}
                  onBack={() => setCurrentStep(WizardStep.Config)}
                  onGoHome={handleGoHome}
-                 onUndo={handleUndo}
-                 canUndo={canUndo}
-                 onRedo={handleRedo}
-                 canRedo={canRedo}
-                 commandName={commandName}
-                 namespace={namespace}
+                 onUndo={handleUndo} canUndo={canUndo}
+                 onRedo={handleRedo} canRedo={canRedo}
+                 filename={getFilename()}
                  onSaveAsTemplate={() => setIsSaveModalOpen(true)}
+                 tool={tool}
                 />;
       default:
-        return null;
+        return <ToolSelectStep onSelectTool={(selectedTool) => { setTool(selectedTool); setCurrentStep(WizardStep.Start); }} />;
     }
   };
 
@@ -326,7 +316,7 @@ const App: React.FC = () => {
         onClose={() => setIsSaveModalOpen(false)} 
         onSave={handleSaveTemplate}
         templates={templates}
-        tomlContent={tomlContent}
+        content={content}
       />
       <div className="min-h-screen bg-[#212934] text-gray-200 flex flex-col p-6 sm:p-8">
         <header className="flex items-center gap-4 mb-8">
@@ -334,8 +324,8 @@ const App: React.FC = () => {
             <Icon path="M15 4V3H9v1H4v2h1v13c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V6h1V4h-5zm-6 11H7v-2h2v2zm4 0h-2v-2h2v2z" className="w-8 h-8 text-[#e2a32d]" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-[#e2a32d]">Gemini CLI Command Generator</h1>
-            <p className="text-[#95aac0]">Create custom commands with a guided, AI-powered workflow.</p>
+            <h1 className="text-3xl font-bold text-[#e2a32d]">AI Developer Tool Generator</h1>
+            <p className="text-[#95aac0]">Create commands & agents for Gemini CLI, Claude-Code, and OpenCode.</p>
           </div>
         </header>
         
@@ -343,7 +333,7 @@ const App: React.FC = () => {
           {isLoading && (historyIndex === -1) ? (
             <div className="flex flex-col items-center justify-center h-full gap-4">
               <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-[#e2a32d]"></div>
-              <p className="text-lg text-gray-200">Generating your command...</p>
+              <p className="text-lg text-gray-200">Generating your artifact...</p>
             </div>
           ) : (
             renderStep()

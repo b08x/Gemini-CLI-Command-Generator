@@ -1,6 +1,6 @@
 import { Template } from '../types';
 
-const TEMPLATE_STORAGE_KEY = 'geminiCliCmdTemplates';
+const TEMPLATE_STORAGE_KEY = 'aiDevToolTemplates'; // Renamed key for the new multi-tool scope
 
 export const getTemplates = (): Template[] => {
   try {
